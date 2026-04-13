@@ -147,6 +147,22 @@ def make_point_id(entity_type: str, entity_id: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"bitrix:{entity_type}:{entity_id}"))
 
 
+def count_points(client: QdrantClient, collection_name: str, entity_type: str) -> int:
+    result = client.count(
+        collection_name=collection_name,
+        count_filter=models.Filter(
+            must=[
+                models.FieldCondition(
+                    key="entity_type",
+                    match=models.MatchValue(value=entity_type),
+                )
+            ]
+        ),
+        exact=True,
+    )
+    return result.count
+
+
 def upload_entities(
     settings: Settings,
     client: QdrantClient,
@@ -230,10 +246,17 @@ def main() -> None:
     companies = fetch_bitrix_entities(settings, "crm.company.list", company_fields)
     deals = fetch_bitrix_entities(settings, "crm.deal.list", deal_fields)
 
+    print(f"Fetched {len(companies)} companies from Bitrix24.")
+    print(f"Fetched {len(deals)} deals from Bitrix24.")
+
     uploaded_companies = upload_entities(settings, qdrant_client, openai_client, "company", companies)
     uploaded_deals = upload_entities(settings, qdrant_client, openai_client, "deal", deals)
 
+    qdrant_companies = count_points(qdrant_client, settings.qdrant_collection, "company")
+    qdrant_deals = count_points(qdrant_client, settings.qdrant_collection, "deal")
+
     print(f"Uploaded {uploaded_companies} companies and {uploaded_deals} deals to Qdrant collection '{settings.qdrant_collection}'.")
+    print(f"Qdrant now contains {qdrant_companies} companies and {qdrant_deals} deals in '{settings.qdrant_collection}'.")
 
 
 if __name__ == "__main__":
