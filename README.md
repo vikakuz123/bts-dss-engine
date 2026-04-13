@@ -1,13 +1,13 @@
 # Bitrix24 to Qdrant Sync
 
-Этот проект выгружает `компании` и `сделки` из Bitrix24, превращает их в текстовые документы, создает эмбеддинги через OpenAI и сохраняет в Qdrant.
+Этот проект выгружает `компании` и `сделки` из Bitrix24, превращает их в текстовые документы, создает локальные эмбеддинги через FastEmbed и сохраняет в Qdrant.
 
 ## Что делает
 
 - читает компании через `crm.company.list`
 - читает сделки через `crm.deal.list`
 - собирает нормализованный текст для векторизации
-- создает embeddings через OpenAI
+- создает embeddings локально через FastEmbed
 - загружает точки в одну коллекцию Qdrant
 
 ## Подготовка
@@ -37,8 +37,7 @@ Copy-Item .env.example .env
 - `QDRANT_URL`
 - `QDRANT_API_KEY` если нужен
 - `QDRANT_COLLECTION`
-- `OPENAI_API_KEY`
-- `OPENAI_EMBEDDING_MODEL`
+- `EMBEDDING_MODEL`
 
 ## Запуск
 
@@ -80,8 +79,7 @@ git push -u origin main
 - `QDRANT_URL`
 - `QDRANT_API_KEY`
 - `QDRANT_COLLECTION`
-- `OPENAI_API_KEY`
-- `OPENAI_EMBEDDING_MODEL`
+- `EMBEDDING_MODEL`
 
 Добавить их можно в:
 
@@ -92,3 +90,4 @@ git push -u origin main
 - GitHub token для push или GitHub Actions
 - доступный Qdrant сервер
 - секреты в `.env` локально или в secrets на сервере/GitHub
+- при первом запуске FastEmbed скачает модель эмбеддингов

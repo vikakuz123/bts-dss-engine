@@ -7,7 +7,7 @@ from typing import Iterable
 
 import requests
 from dotenv import load_dotenv
-from openai import OpenAI
+from fastembed import TextEmbedding
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
@@ -18,22 +18,19 @@ class Settings:
     qdrant_url: str
     qdrant_api_key: str | None
     qdrant_collection: str
-    openai_api_key: str
-    openai_embedding_model: str
+    embedding_model: str
 
 
 def load_settings() -> Settings:
     load_dotenv()
     bitrix_webhook_base = os.getenv("BITRIX_WEBHOOK_BASE", "").rstrip("/")
     qdrant_url = os.getenv("QDRANT_URL", "").strip()
-    openai_api_key = os.getenv("OPENAI_API_KEY", "").strip()
 
     missing = [
         name
         for name, value in {
             "BITRIX_WEBHOOK_BASE": bitrix_webhook_base,
             "QDRANT_URL": qdrant_url,
-            "OPENAI_API_KEY": openai_api_key,
         }.items()
         if not value
     ]
@@ -45,8 +42,10 @@ def load_settings() -> Settings:
         qdrant_url=qdrant_url,
         qdrant_api_key=os.getenv("QDRANT_API_KEY", "").strip() or None,
         qdrant_collection=os.getenv("QDRANT_COLLECTION", "bitrix_crm").strip(),
-        openai_api_key=openai_api_key,
-        openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small").strip(),
+        embedding_model=os.getenv(
+            "EMBEDDING_MODEL",
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        ).strip(),
     )
 
 
@@ -166,7 +165,7 @@ def count_points(client: QdrantClient, collection_name: str, entity_type: str) -
 def upload_entities(
     settings: Settings,
     client: QdrantClient,
-    openai_client: OpenAI,
+    embedding_model: TextEmbedding,
     entity_type: str,
     records: list[dict],
 ) -> int:
@@ -174,11 +173,7 @@ def upload_entities(
 
     for batch in chunked(records, size=50):
         documents = [build_document(entity_type, record) for record in batch]
-        embeddings = openai_client.embeddings.create(
-            model=settings.openai_embedding_model,
-            input=documents,
-        )
-        vectors = [item.embedding for item in embeddings.data]
+        vectors = [vector.tolist() for vector in embedding_model.embed(documents)]
 
         if uploaded == 0 and vectors:
             ensure_collection(client, settings.qdrant_collection, len(vectors[0]))
@@ -215,7 +210,7 @@ def upload_entities(
 def main() -> None:
     settings = load_settings()
     qdrant_client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
-    openai_client = OpenAI(api_key=settings.openai_api_key)
+    embedding_model = TextEmbedding(model_name=settings.embedding_model)
 
     company_fields = [
         "ID",
@@ -249,8 +244,8 @@ def main() -> None:
     print(f"Fetched {len(companies)} companies from Bitrix24.")
     print(f"Fetched {len(deals)} deals from Bitrix24.")
 
-    uploaded_companies = upload_entities(settings, qdrant_client, openai_client, "company", companies)
-    uploaded_deals = upload_entities(settings, qdrant_client, openai_client, "deal", deals)
+    uploaded_companies = upload_entities(settings, qdrant_client, embedding_model, "company", companies)
+    uploaded_deals = upload_entities(settings, qdrant_client, embedding_model, "deal", deals)
 
     qdrant_companies = count_points(qdrant_client, settings.qdrant_collection, "company")
     qdrant_deals = count_points(qdrant_client, settings.qdrant_collection, "deal")

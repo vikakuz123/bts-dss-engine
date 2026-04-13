@@ -27,6 +27,5 @@ jobs:
           QDRANT_URL: ${{ secrets.QDRANT_URL }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
           QDRANT_COLLECTION: ${{ secrets.QDRANT_COLLECTION }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_EMBEDDING_MODEL: ${{ secrets.OPENAI_EMBEDDING_MODEL }}
+          EMBEDDING_MODEL: ${{ secrets.EMBEDDING_MODEL }}
         run: python sync_bitrix_to_qdrant.py
