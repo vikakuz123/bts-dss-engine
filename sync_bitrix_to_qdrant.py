@@ -4,6 +4,7 @@ import os
 import uuid
 from dataclasses import dataclass
 from typing import Iterable
+from urllib.parse import urlparse
 
 import requests
 from dotenv import load_dotenv
@@ -36,6 +37,13 @@ def load_settings() -> Settings:
     ]
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
+
+    parsed_qdrant_url = urlparse(qdrant_url)
+    if parsed_qdrant_url.scheme not in {"http", "https"} or not parsed_qdrant_url.netloc:
+        raise RuntimeError(
+            "QDRANT_URL must be a full URL like "
+            "'https://<cluster-id>.<region>.cloud.qdrant.io', not just a cluster id."
+        )
 
     return Settings(
         bitrix_webhook_base=bitrix_webhook_base,
@@ -212,7 +220,11 @@ def upload_entities(
 
 def main() -> None:
     settings = load_settings()
-    qdrant_client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+    qdrant_client = QdrantClient(
+        url=settings.qdrant_url,
+        api_key=settings.qdrant_api_key,
+        check_compatibility=False,
+    )
     embedding_model = TextEmbedding(model_name=settings.embedding_model)
 
     company_fields = [

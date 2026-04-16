@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from fastembed import TextEmbedding
@@ -35,6 +36,13 @@ def load_settings() -> dict[str, str | None]:
     if missing:
         raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 
+    parsed_qdrant_url = urlparse(qdrant_url)
+    if parsed_qdrant_url.scheme not in {"http", "https"} or not parsed_qdrant_url.netloc:
+        raise RuntimeError(
+            "QDRANT_URL must be a full URL like "
+            "'https://<cluster-id>.<region>.cloud.qdrant.io', not just a cluster id."
+        )
+
     return {
         "qdrant_url": qdrant_url,
         "qdrant_api_key": os.getenv("QDRANT_API_KEY", "").strip() or None,
@@ -64,18 +72,20 @@ def main() -> None:
     client = QdrantClient(
         url=settings["qdrant_url"],
         api_key=settings["qdrant_api_key"],
+        check_compatibility=False,
     )
     embedding_model = TextEmbedding(model_name=str(settings["embedding_model"]))
 
     query_vector = next(embedding_model.embed([args.query])).tolist()
-    results = client.search(
+    response = client.query_points(
         collection_name=str(settings["qdrant_collection"]),
-        query_vector=query_vector,
+        query=query_vector,
         query_filter=build_filter(args.entity_type),
         limit=args.limit,
         with_payload=True,
         with_vectors=False,
     )
+    results = response.points
 
     if not results:
         print("No results found.")

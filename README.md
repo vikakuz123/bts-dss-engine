@@ -71,6 +71,23 @@ python .\search_qdrant.py "Москва" --entity-type company
 python .\search_qdrant.py "тестовая сделка" --entity-type deal
 ```
 
+## Локальный API
+
+После настройки `.env` можно запустить локальный backend:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+Проверка в браузере:
+
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/health`
+- `http://127.0.0.1:8000/health/db`
+- `http://127.0.0.1:8000/setup/db` (POST)
+- `http://127.0.0.1:8000/health/qdrant`
+- `http://127.0.0.1:8000/docs`
+
 ## Что попадет в Qdrant
 
 Каждая точка содержит:
