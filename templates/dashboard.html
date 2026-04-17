@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ app_name }} Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
+</head>
+<body>
+    <main class="page-shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Decision Support Workspace</p>
+                <h1>{{ app_name }}</h1>
+                <p class="lede">
+                    A live cockpit for Bitrix opportunities, recommendation logic, and manager feedback.
+                    This version adds filters, scoring, analytics, and quick actions so the DSS feels like an operating tool, not just an API demo.
+                </p>
+            </div>
+            <div class="hero-panel">
+                <div class="meta-row">
+                    <span class="meta-label">Environment</span>
+                    <span class="meta-value">{{ app_env }}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Visible opportunities</span>
+                    <span class="meta-value">{{ view.metrics.opportunities }}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Recommended actions</span>
+                    <span class="meta-value">{{ view.metrics.actions }}</span>
+                </div>
+                <div class="meta-row">
+                    <span class="meta-label">Average priority</span>
+                    <span class="meta-value">{{ view.analytics.avg_priority }}</span>
+                </div>
+                <form method="post" action="/dashboard/run-pipeline">
+                    <button class="primary-button" type="submit">Refresh Bitrix Pipeline</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="metric-grid">
+            <article class="metric-card accent-amber">
+                <span class="metric-value">{{ view.metrics.raw_deals }}</span>
+                <span class="metric-label">Raw Bitrix deals</span>
+            </article>
+            <article class="metric-card accent-blue">
+                <span class="metric-value">{{ view.metrics.opportunities }}</span>
+                <span class="metric-label">Visible opportunities</span>
+            </article>
+            <article class="metric-card accent-green">
+                <span class="metric-value">{{ view.analytics.high_priority }}</span>
+                <span class="metric-label">High-priority deals</span>
+            </article>
+            <article class="metric-card accent-rose">
+                <span class="metric-value">{{ view.analytics.funnel.overall_success_conversion_pct }}</span>
+                <span class="metric-label">Overall success conversion, %</span>
+            </article>
+        </section>
+
+        <section class="analytics-section">
+            <div class="section-heading">
+                <h2>Sales Funnel</h2>
+                <p>Two stage-to-stage conversions plus weighted loss analysis by failure reason.</p>
+            </div>
+            <div class="analytics-grid analytics-grid-funnel">
+                <article class="analytics-card">
+                    <h3>Funnel totals</h3>
+                    <div class="mini-list">
+                        <div class="mini-row">
+                            <span>Initial deals</span>
+                            <strong>{{ view.analytics.funnel.initial_count }}</strong>
+                        </div>
+                        <div class="mini-row">
+                            <span>Won deals</span>
+                            <strong>{{ view.analytics.funnel.won_count }}</strong>
+                        </div>
+                        <div class="mini-row">
+                            <span>Lost deals</span>
+                            <strong>{{ view.analytics.funnel.lost_count }}</strong>
+                        </div>
+                        <div class="mini-row">
+                            <span>Active deals</span>
+                            <strong>{{ view.analytics.funnel.active_count }}</strong>
+                        </div>
+                        <div class="mini-row">
+                            <span>Success conversion</span>
+                            <strong>{{ view.analytics.funnel.overall_success_conversion_pct }}%</strong>
+                        </div>
+                    </div>
+                </article>
+                <article class="analytics-card analytics-card-wide">
+                    <h3>Stage conversions</h3>
+                    {% if view.analytics.funnel.stages %}
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Stage</th>
+                                    <th>Deals</th>
+                                    <th>From initial, %</th>
+                                    <th>From previous, %</th>
+                                    <th>Won</th>
+                                    <th>Lost</th>
+                                    <th>Active</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for stage in view.analytics.funnel.stages %}
+                                <tr>
+                                    <td>{{ stage.label }}</td>
+                                    <td>{{ stage.count }}</td>
+                                    <td>{{ stage.conversion_from_start_pct }}</td>
+                                    <td>{{ stage.conversion_from_previous_pct }}</td>
+                                    <td>{{ stage.won_count }}</td>
+                                    <td>{{ stage.lost_count }}</td>
+                                    <td>{{ stage.active_count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="empty-state">No funnel data yet.</p>
+                    {% endif %}
+                </article>
+            </div>
+            <div class="analytics-grid analytics-grid-funnel-secondary">
+                <article class="analytics-card">
+                    <h3>Weighted loss reasons</h3>
+                    <div class="mini-list">
+                        {% for reason in view.analytics.funnel.failure_reasons %}
+                        <div class="mini-row mini-row-stack">
+                            <span>{{ reason.reason }}</span>
+                            <strong>{{ reason.weighted_deals }} deals / {{ reason.share_of_lost_pct }}%</strong>
+                        </div>
+                        {% else %}
+                        <p class="empty-state">No failed deals yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+                <article class="analytics-card analytics-card-wide">
+                    <h3>Losses by stage</h3>
+                    <div class="mini-list">
+                        {% for stage in view.analytics.funnel.stage_failure_breakdown if stage.lost_count %}
+                        <div class="stage-loss-card">
+                            <div class="mini-row">
+                                <span>{{ stage.label }}</span>
+                                <strong>{{ stage.lost_count }} lost / {{ stage.share_of_lost_pct }}%</strong>
+                            </div>
+                            <div class="mini-list nested-mini-list">
+                                {% for reason in stage.failure_reasons %}
+                                <div class="mini-row mini-row-stack">
+                                    <span>{{ reason.reason }}</span>
+                                    <strong>{{ reason.weighted_deals }} weight / {{ reason.share_within_stage_losses_pct }}%</strong>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="empty-state">No stage-level loss breakdown yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="filter-section">
+            <div class="section-heading">
+                <h2>Filters and Search</h2>
+                <p>Focus the board on the deals that actually need attention right now.</p>
+            </div>
+            <form class="filter-grid" method="get" action="/dashboard">
+                <label>
+                    Search
+                    <input type="text" name="search" value="{{ view.filters.search }}" placeholder="Deal title, ID, company, comment">
+                </label>
+                <label>
+                    State
+                    <select name="state">
+                        <option value="">All states</option>
+                        {% for state in view.available_states %}
+                        <option value="{{ state }}" {% if view.filters.state == state %}selected{% endif %}>{{ state }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Stage
+                    <select name="stage">
+                        <option value="">All stages</option>
+                        {% for stage in view.available_stages %}
+                        <option value="{{ stage }}" {% if view.filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Priority
+                    <select name="priority">
+                        <option value="">All bands</option>
+                        <option value="high" {% if view.filters.priority == "high" %}selected{% endif %}>high</option>
+                        <option value="medium" {% if view.filters.priority == "medium" %}selected{% endif %}>medium</option>
+                        <option value="low" {% if view.filters.priority == "low" %}selected{% endif %}>low</option>
+                    </select>
+                </label>
+                <label>
+                    Next step
+                    <select name="next_step">
+                        <option value="">Any</option>
+                        <option value="missing" {% if view.filters.next_step == "missing" %}selected{% endif %}>missing</option>
+                        <option value="present" {% if view.filters.next_step == "present" %}selected{% endif %}>present</option>
+                    </select>
+                </label>
+                <div class="filter-actions">
+                    <button class="secondary-button" type="submit">Apply filters</button>
+                    <a class="ghost-link" href="/dashboard">Reset</a>
+                </div>
+            </form>
+        </section>
+
+        <section class="analytics-section">
+            <div class="section-heading">
+                <h2>Pipeline Analytics</h2>
+                <p>Useful for demo, operations review, and coursework screenshots.</p>
+            </div>
+            <div class="analytics-grid">
+                <article class="analytics-card">
+                    <h3>Top stages</h3>
+                    <div class="mini-list">
+                        {% for stage, count in view.analytics.stage_counts.items() %}
+                        <div class="mini-row">
+                            <span>{{ stage }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </article>
+                <article class="analytics-card">
+                    <h3>Feedback decisions</h3>
+                    <div class="mini-list">
+                        {% for decision, count in view.analytics.feedback_counts.items() %}
+                        <div class="mini-row">
+                            <span>{{ decision }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                        {% else %}
+                        <p class="empty-state">No feedback yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+                <article class="analytics-card">
+                    <h3>Action statuses</h3>
+                    <div class="mini-list">
+                        {% for status, count in view.analytics.action_status_counts.items() %}
+                        <div class="mini-row">
+                            <span>{{ status }}</span>
+                            <strong>{{ count }}</strong>
+                        </div>
+                        {% else %}
+                        <p class="empty-state">No actions yet.</p>
+                        {% endfor %}
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="state-section">
+            <div class="section-heading">
+                <h2>State Overview</h2>
+                <p>Quick visibility into where the pipeline is getting stuck.</p>
+            </div>
+            <div class="state-pills">
+                {% for state, count in view.state_counts.items() %}
+                <span class="state-pill">
+                    <strong>{{ count }}</strong>
+                    <span>{{ state }}</span>
+                </span>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="table-section">
+            <div class="section-heading">
+                <h2>Opportunity Board</h2>
+                <p>Sorted by priority so the most urgent deals float to the top.</p>
+            </div>
+
+            {% if view.opportunities %}
+            <div class="board">
+                {% for opportunity in view.opportunities %}
+                <article class="opportunity-card">
+                    <header class="opportunity-header">
+                        <div>
+                            <p class="deal-id">Deal #{{ opportunity.source_deal_id }}</p>
+                            <h3>{{ opportunity.title or "Untitled opportunity" }}</h3>
+                        </div>
+                        <div class="priority-chip priority-chip-{{ opportunity.priority_band }}">
+                            <span>Priority</span>
+                            <strong>{{ opportunity.priority_score_value }}</strong>
+                        </div>
+                    </header>
+
+                    <div class="opportunity-grid">
+                        <div class="info-block">
+                            <span class="info-label">Stage</span>
+                            <span class="info-value">{{ opportunity.stage_id or "not set" }}</span>
+                        </div>
+                        <div class="info-block">
+                            <span class="info-label">State</span>
+                            <span class="info-value">{{ opportunity.state_code or "unknown" }}</span>
+                        </div>
+                        <div class="info-block">
+                            <span class="info-label">Company / Contact</span>
+                            <span class="info-value">{{ opportunity.company_id or "missing" }} / {{ opportunity.contact_id or "missing" }}</span>
+                        </div>
+                        <div class="info-block">
+                            <span class="info-label">Value / Age</span>
+                            <span class="info-value">{{ opportunity.opportunity_value or "0" }} {{ opportunity.currency_id or "" }} / {{ opportunity.age_days }}d</span>
+                        </div>
+                    </div>
+
+                    <div class="comment-box">
+                        <span class="info-label">Last comment</span>
+                        <p>{{ opportunity.last_comment or "No comment from Bitrix yet." }}</p>
+                    </div>
+
+                    <form class="next-step-form" method="post" action="/dashboard/opportunities/{{ opportunity.id }}/next-step">
+                        <label for="next-step-{{ opportunity.id }}">Next step</label>
+                        <textarea
+                            id="next-step-{{ opportunity.id }}"
+                            name="next_step"
+                            rows="3"
+                            placeholder="Describe the next manager action"
+                        >{{ opportunity.next_step or "" }}</textarea>
+                        <button class="secondary-button" type="submit">Save next step and recompute</button>
+                    </form>
+
+                    <div class="action-list">
+                        <div class="subheading-row">
+                            <h4>Recommended actions</h4>
+                            <span>{{ opportunity.actions|length }} items</span>
+                        </div>
+                        {% if opportunity.actions %}
+                            {% for action in opportunity.actions %}
+                            <section class="action-card">
+                                <div class="action-topline">
+                                    <div>
+                                        <strong>{{ action.action_name }}</strong>
+                                        <p>{{ action.reason }}</p>
+                                    </div>
+                                    <div class="action-tags">
+                                        <span class="action-priority priority-{{ action.priority }}">{{ action.priority }}</span>
+                                        <span class="status-pill status-{{ action.status|replace('_', '-') }}">{{ action.status }}</span>
+                                    </div>
+                                </div>
+
+                                {% if action.explainability %}
+                                <div class="explainability-box">
+                                    <p><strong>Summary:</strong> {{ action.explainability.summary }}</p>
+                                    <p><strong>Why important:</strong> {{ action.explainability.why_important }}</p>
+                                    <p><strong>Reason:</strong> {{ action.explainability.recommended_action_reason }}</p>
+                                    <p><strong>Risk:</strong> {{ action.explainability.risk_if_ignored }}</p>
+                                </div>
+                                {% endif %}
+
+                                <div class="quick-actions">
+                                    <form method="post" action="/dashboard/actions/{{ action.id }}/status">
+                                        <input type="hidden" name="status" value="accepted">
+                                        <button class="tiny-button" type="submit">Accept</button>
+                                    </form>
+                                    <form method="post" action="/dashboard/actions/{{ action.id }}/status">
+                                        <input type="hidden" name="status" value="postponed">
+                                        <button class="tiny-button" type="submit">Postpone</button>
+                                    </form>
+                                    <form method="post" action="/dashboard/actions/{{ action.id }}/status">
+                                        <input type="hidden" name="status" value="done">
+                                        <button class="tiny-button" type="submit">Mark done</button>
+                                    </form>
+                                    <form method="post" action="/dashboard/actions/{{ action.id }}/status">
+                                        <input type="hidden" name="status" value="rejected">
+                                        <button class="tiny-button" type="submit">Reject</button>
+                                    </form>
+                                </div>
+
+                                <form class="feedback-form" method="post" action="/dashboard/actions/{{ action.id }}/feedback">
+                                    <input type="hidden" name="shown_to_role" value="manager">
+                                    <div class="feedback-grid">
+                                        <label>
+                                            Decision
+                                            <select name="decision">
+                                                <option value="accepted">accepted</option>
+                                                <option value="rejected">rejected</option>
+                                                <option value="postponed">postponed</option>
+                                            </select>
+                                        </label>
+                                        <label>
+                                            Executed
+                                            <select name="executed">
+                                                <option value="no">no</option>
+                                                <option value="yes">yes</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                    <label>
+                                        Rejection reason
+                                        <input type="text" name="rejection_reason" placeholder="Only if rejected">
+                                    </label>
+                                    <label>
+                                        Outcome note
+                                        <input type="text" name="outcome_note" placeholder="What happened after the action">
+                                    </label>
+                                    <div class="feedback-footer">
+                                        <span>{{ action.feedback_count }} feedback records</span>
+                                        <button class="ghost-button" type="submit">Submit feedback</button>
+                                    </div>
+                                </form>
+                            </section>
+                            {% endfor %}
+                        {% else %}
+                        <p class="empty-state">No actions yet. Run the pipeline or save a next step to generate recommendations.</p>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <article class="empty-panel">
+                <h3>No opportunities matched the current filters</h3>
+                <p>Try resetting filters or run the pipeline to ingest more Bitrix data.</p>
+            </article>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>

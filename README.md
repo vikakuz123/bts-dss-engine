@@ -82,11 +82,61 @@ uvicorn app.main:app --reload
 Проверка в браузере:
 
 - `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/dashboard`
 - `http://127.0.0.1:8000/health`
 - `http://127.0.0.1:8000/health/db`
 - `http://127.0.0.1:8000/setup/db` (POST)
 - `http://127.0.0.1:8000/health/qdrant`
 - `http://127.0.0.1:8000/docs`
+
+## Dashboard
+
+В проект добавлен HTML dashboard поверх FastAPI.
+
+Что можно делать через `http://127.0.0.1:8000/dashboard`:
+
+- смотреть opportunities, отсортированные по `priority_score`
+- фильтровать сделки по `state`, `stage`, `priority band`, наличию `next_step`
+- искать по названию сделки, ID, компании и последнему комментарию
+- видеть рекомендации системы и explainability
+- редактировать `next_step` прямо из браузера
+- быстро менять статус рекомендации: `accepted`, `postponed`, `done`, `rejected`
+- отправлять feedback по действиям менеджера
+- видеть аналитику по стадиям, feedback и статусам действий
+- видеть funnel analytics:
+  - конверсию с этапа на этап от первоначальной величины
+  - конверсию с этапа на этап от предыдущей величины
+  - итоговую успешную конверсию в %
+  - взвешенное распределение проваленных сделок по причинам отказа
+  - распределение потерь по этапам воронки
+- запускать полный pipeline ingest -> opportunities -> states -> priority -> actions -> explainability
+
+## Что улучшено в DSS-логике
+
+- расширены `state_code`: `missing_data`, `stalled`, `needs_attention`, `proposal_pending`, `high_value_in_progress`, `closed`, `lost`
+- `priority_score` теперь учитывает не только state, но и сумму сделки, возраст записи, наличие `next_step`, компании, контакта, комментария и feedback
+- добавлены новые типы рекомендаций:
+  - `request_missing_data`
+  - `follow_up_manager`
+  - `revive_client_contact`
+  - `monitor_progress`
+  - `prepare_offer`
+  - `schedule_client_call`
+  - `escalate_to_supervisor`
+
+## Полезные API маршруты
+
+- `GET /dashboard`
+- `GET /analytics/summary`
+- `GET /opportunities`
+- `GET /actions`
+- `GET /feedback/actions`
+- `POST /ingest/bitrix/deals`
+- `POST /build/opportunities`
+- `POST /compute/opportunity-states`
+- `POST /compute/opportunity-priority`
+- `POST /build/actions`
+- `POST /build/explainability`
 
 ## Что попадет в Qdrant
 

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import re
+from typing import Any
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -13,6 +17,130 @@ from app.models import (
     OpportunityExplainability,
     RawBitrixDeal,
 )
+
+
+def _as_text(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _parse_amount(value: object) -> float:
+    raw = _as_text(value).replace(" ", "").replace(",", ".")
+    if not raw:
+        return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
+
+
+def _contains_any(value: object, needles: tuple[str, ...]) -> bool:
+    haystack = _as_text(value).upper()
+    return any(needle in haystack for needle in needles)
+
+
+def _age_in_days(created_at: datetime | None) -> int:
+    if created_at is None:
+        return 0
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - created_at).total_seconds() // 86400))
+
+
+def _to_percent(numerator: float, denominator: float) -> float:
+    if denominator <= 0:
+        return 0.0
+    return round((numerator / denominator) * 100, 2)
+
+
+def _stage_rank(stage_id: object) -> tuple[int, str]:
+    stage = _as_text(stage_id).upper()
+    hints = [
+        ("NEW", 10),
+        ("QUAL", 20),
+        ("CONTACT", 30),
+        ("MEET", 40),
+        ("PREPAR", 50),
+        ("PROPOSAL", 60),
+        ("QUOTE", 65),
+        ("NEGOT", 70),
+        ("FINAL", 80),
+        ("WON", 90),
+        ("SUCCESS", 90),
+        ("LOSE", 95),
+        ("FAIL", 95),
+        ("CANCEL", 95),
+    ]
+    for needle, rank in hints:
+        if needle in stage:
+            return rank, stage
+    return 50, stage
+
+
+def _stage_label(stage_id: object) -> str:
+    stage = _as_text(stage_id)
+    if not stage:
+        return "Unknown"
+    return stage.replace("_", " ").replace(":", " / ")
+
+
+def _split_reason_tokens(raw: object) -> list[str]:
+    value = _as_text(raw)
+    if not value:
+        return []
+    parts = re.split(r"[,\n;|/]+", value)
+    return [part.strip(" .:-") for part in parts if part.strip(" .:-")]
+
+
+def _extract_failure_reasons(raw_payload: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    preferred_keys: list[str] = []
+    fallback_keys: list[str] = []
+
+    for key in raw_payload:
+        upper_key = key.upper()
+        if any(token in upper_key for token in ("LOSS", "FAIL", "REJECT", "CANCEL", "REASON")):
+            if upper_key.startswith("UF_CRM"):
+                preferred_keys.append(key)
+            else:
+                fallback_keys.append(key)
+
+    for key in preferred_keys + fallback_keys:
+        reasons.extend(_split_reason_tokens(raw_payload.get(key)))
+
+    unique_reasons: list[str] = []
+    seen: set[str] = set()
+    for reason in reasons:
+        normalized = reason.lower()
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_reasons.append(reason)
+
+    if unique_reasons:
+        return unique_reasons[:4]
+
+    comments = _split_reason_tokens(raw_payload.get("COMMENTS"))
+    if comments:
+        return comments[:1]
+    return ["Unspecified loss reason"]
+
+
+def _deal_is_won(raw_payload: dict[str, Any]) -> bool:
+    stage_id = _as_text(raw_payload.get("STAGE_ID")).upper()
+    semantic = _as_text(raw_payload.get("STAGE_SEMANTIC_ID")).upper()
+    won_flag = _as_text(raw_payload.get("WON")).upper()
+    return semantic == "S" or won_flag in {"Y", "1", "TRUE"} or _contains_any(stage_id, ("WON", "SUCCESS"))
+
+
+def _deal_is_lost(raw_payload: dict[str, Any]) -> bool:
+    stage_id = _as_text(raw_payload.get("STAGE_ID")).upper()
+    semantic = _as_text(raw_payload.get("STAGE_SEMANTIC_ID")).upper()
+    closed_flag = _as_text(raw_payload.get("CLOSED")).upper()
+    if semantic == "F":
+        return True
+    if closed_flag in {"Y", "1", "TRUE"} and not _deal_is_won(raw_payload):
+        return True
+    return _contains_any(stage_id, ("LOSE", "FAIL", "CANCEL", "REJECT"))
 
 
 def normalize_database_url(database_url: str) -> str:
@@ -39,6 +167,32 @@ def check_database(engine: Engine) -> dict[str, object]:
 def create_tables(engine: Engine) -> list[str]:
     Base.metadata.create_all(engine)
     return sorted(Base.metadata.tables.keys())
+
+
+def list_raw_bitrix_deals_for_analytics(engine: Engine) -> list[dict[str, Any]]:
+    with Session(engine) as session:
+        deals = session.query(RawBitrixDeal).order_by(RawBitrixDeal.id.asc()).all()
+
+    items: list[dict[str, Any]] = []
+    for deal in deals:
+        raw_payload = deal.raw_payload or {}
+        items.append(
+            {
+                "id": deal.id,
+                "bitrix_id": deal.bitrix_id,
+                "title": deal.title,
+                "stage_id": deal.stage_id,
+                "company_id": deal.company_id,
+                "contact_id": deal.contact_id,
+                "opportunity": deal.opportunity,
+                "currency_id": deal.currency_id,
+                "comments": deal.comments,
+                "raw_payload": raw_payload,
+                "created_at": deal.created_at.isoformat() if deal.created_at else None,
+            }
+        )
+
+    return items
 
 
 def list_raw_bitrix_deals(engine: Engine, limit: int = 20) -> list[dict[str, object]]:
@@ -183,6 +337,7 @@ def list_opportunities(engine: Engine, limit: int = 20) -> list[dict[str, object
             "next_step": item.next_step,
             "priority_score": item.priority_score,
             "state_code": item.state_code,
+            "age_days": _age_in_days(item.created_at),
             "created_at": item.created_at.isoformat() if item.created_at else None,
         }
         for item in items
@@ -196,14 +351,27 @@ def recompute_opportunity_states(engine: Engine) -> dict[str, int]:
         items = session.query(Opportunity).order_by(Opportunity.id.asc()).all()
 
         for item in items:
-            new_state_code = item.state_code
+            stage = _as_text(item.stage_id).upper()
+            next_step_present = bool(_as_text(item.next_step))
+            has_comment = bool(_as_text(item.last_comment))
+            amount = _parse_amount(item.opportunity_value)
 
-            if item.stage_id == "NEW" and (item.next_step or "").strip():
-                new_state_code = "in_progress"
-            elif item.stage_id == "NEW" and not (item.next_step or "").strip():
+            if _contains_any(stage, ("WON", "SUCCESS", "CLOSE", "CLOSED")):
+                new_state_code = "closed"
+            elif _contains_any(stage, ("LOSE", "FAILED", "CANCEL")):
+                new_state_code = "lost"
+            elif not _as_text(item.company_id) and not _as_text(item.contact_id):
+                new_state_code = "missing_data"
+            elif not next_step_present and not has_comment:
+                new_state_code = "stalled"
+            elif not next_step_present:
                 new_state_code = "needs_attention"
-            elif item.stage_id == "NEW":
-                new_state_code = "raw_new"
+            elif _contains_any(stage, ("PROPOSAL", "PREPAR", "QUOTE", "PRESENT")):
+                new_state_code = "proposal_pending"
+            elif amount >= 100000:
+                new_state_code = "high_value_in_progress"
+            else:
+                new_state_code = "in_progress"
 
             if item.state_code != new_state_code:
                 item.state_code = new_state_code
@@ -224,49 +392,129 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
         items = session.query(Opportunity).order_by(Opportunity.id.asc()).all()
 
         for item in items:
-            if item.state_code == "needs_attention":
-                action_code = "follow_up_manager"
-                payload = {
-                    "action_name": "Follow up with manager",
-                    "target_role": "manager",
-                    "reason": "Opportunity is new and has no next step",
-                    "priority": "high",
-                    "status": "open",
-                }
-            elif item.state_code == "in_progress":
-                action_code = "monitor_progress"
-                payload = {
-                    "action_name": "Monitor progress",
-                    "target_role": "manager",
-                    "reason": "Opportunity has a next step and should be monitored for execution",
-                    "priority": "normal",
-                    "status": "open",
-                }
-            else:
-                continue
+            desired_actions: list[tuple[str, dict[str, str]]] = []
+            amount = _parse_amount(item.opportunity_value)
 
-            existing = (
-                session.query(OpportunityAction)
-                .filter_by(
-                    opportunity_id=item.id,
-                    action_code=action_code,
-                )
-                .one_or_none()
-            )
-
-            if existing is None:
-                session.add(
-                    OpportunityAction(
-                        opportunity_id=item.id,
-                        action_code=action_code,
-                        **payload,
+            if item.state_code == "missing_data":
+                desired_actions.append(
+                    (
+                        "request_missing_data",
+                        {
+                            "action_name": "Request missing CRM data",
+                            "target_role": "sales_ops",
+                            "reason": "Opportunity is missing company or contact linkage and cannot move safely.",
+                            "priority": "high",
+                            "status": "open",
+                        },
                     )
                 )
-                inserted += 1
-            else:
-                for key, value in payload.items():
-                    setattr(existing, key, value)
-                updated += 1
+            if item.state_code in {"needs_attention", "stalled"}:
+                desired_actions.append(
+                    (
+                        "follow_up_manager",
+                        {
+                            "action_name": "Follow up with manager",
+                            "target_role": "manager",
+                            "reason": "Opportunity has no clear next step and needs a human owner to move it forward.",
+                            "priority": "high",
+                            "status": "open",
+                        },
+                    )
+                )
+            if item.state_code == "stalled":
+                desired_actions.append(
+                    (
+                        "revive_client_contact",
+                        {
+                            "action_name": "Revive client contact",
+                            "target_role": "manager",
+                            "reason": "No next step and no useful recent context were found, so the deal risks going cold.",
+                            "priority": "high",
+                            "status": "open",
+                        },
+                    )
+                )
+            if item.state_code in {"in_progress", "high_value_in_progress"}:
+                desired_actions.append(
+                    (
+                        "monitor_progress",
+                        {
+                            "action_name": "Monitor progress",
+                            "target_role": "manager",
+                            "reason": "Opportunity already has a next step and should be monitored for execution.",
+                            "priority": "normal",
+                            "status": "open",
+                        },
+                    )
+                )
+            if item.state_code in {"proposal_pending", "high_value_in_progress"}:
+                desired_actions.append(
+                    (
+                        "prepare_offer",
+                        {
+                            "action_name": "Prepare commercial offer",
+                            "target_role": "manager",
+                            "reason": "The deal appears close to proposal work and needs a concrete offer or presentation.",
+                            "priority": "high" if amount >= 100000 else "normal",
+                            "status": "open",
+                        },
+                    )
+                )
+            if _as_text(item.contact_id) and not _as_text(item.next_step):
+                desired_actions.append(
+                    (
+                        "schedule_client_call",
+                        {
+                            "action_name": "Schedule client call",
+                            "target_role": "manager",
+                            "reason": "A contact exists, but the next concrete action is still missing.",
+                            "priority": "normal",
+                            "status": "open",
+                        },
+                    )
+                )
+            if amount >= 250000:
+                desired_actions.append(
+                    (
+                        "escalate_to_supervisor",
+                        {
+                            "action_name": "Escalate to supervisor",
+                            "target_role": "supervisor",
+                            "reason": "High-value opportunity deserves oversight to reduce execution risk.",
+                            "priority": "high",
+                            "status": "open",
+                        },
+                    )
+                )
+
+            existing_items = (
+                session.query(OpportunityAction)
+                .filter_by(opportunity_id=item.id)
+                .all()
+            )
+            existing_by_code = {existing.action_code: existing for existing in existing_items}
+            desired_codes = {action_code for action_code, _ in desired_actions}
+
+            for action_code, payload in desired_actions:
+                existing = existing_by_code.get(action_code)
+                if existing is None:
+                    session.add(
+                        OpportunityAction(
+                            opportunity_id=item.id,
+                            action_code=action_code,
+                            **payload,
+                        )
+                    )
+                    inserted += 1
+                else:
+                    for key, value in payload.items():
+                        setattr(existing, key, value)
+                    updated += 1
+
+            for existing in existing_items:
+                if existing.action_code not in desired_codes and existing.status not in {"done", "rejected"}:
+                    existing.status = "closed"
+                    updated += 1
 
         session.commit()
 
@@ -320,44 +568,85 @@ def build_explainability_from_actions(engine: Engine) -> dict[str, int]:
                 .one_or_none()
             )
 
-            if action.action_code == "monitor_progress":
-                summary = (
-                    f"Opportunity '{opportunity.title}' is in progress because it already has "
-                    f"a planned next step and remains in stage '{opportunity.stage_id}'."
-                )
-                why_important = "The opportunity is active and should be monitored so the planned next step is executed."
-                recommended_action_reason = (
-                    "The system recommends monitor_progress because the next step already exists "
-                    "and the manager should control execution rather than create a new action from scratch."
-                )
-                risk_if_ignored = (
-                    "If progress is not monitored, the planned next step may be missed and the opportunity "
-                    "can fall back into a stagnant state."
-                )
-            else:
-                summary = (
-                    f"Opportunity '{opportunity.title}' requires attention because it is still in "
-                    f"stage '{opportunity.stage_id}' and has no next step."
-                )
-                why_important = "The opportunity is new and currently has no recorded next action."
-                recommended_action_reason = (
-                    "The system recommends follow_up_manager because the manager needs to move "
-                    "the opportunity forward from a new state into an active next step."
-                )
-                risk_if_ignored = (
-                    "If the opportunity is ignored, it may remain without movement and lose priority "
-                    "or commercial momentum."
-                )
+            explainability_map: dict[str, dict[str, str]] = {
+                "monitor_progress": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' already has a next step and remains active "
+                        f"in stage '{opportunity.stage_id}'."
+                    ),
+                    "why_important": "Execution risk is now more important than ideation risk, so follow-through matters most.",
+                    "recommended_action_reason": "The system recommends monitoring rather than re-planning because a concrete next action already exists.",
+                    "risk_if_ignored": "The deal can quietly stall if the planned follow-up is never checked.",
+                },
+                "follow_up_manager": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' has no dependable next step in stage '{opportunity.stage_id}'."
+                    ),
+                    "why_important": "Without an owner-driven next action, even a promising deal loses momentum quickly.",
+                    "recommended_action_reason": "The system recommends manager follow-up to restore ownership and define the next move.",
+                    "risk_if_ignored": "The opportunity may remain open in CRM but stop moving in reality.",
+                },
+                "request_missing_data": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' is missing critical CRM linkage such as company or contact data."
+                    ),
+                    "why_important": "Incomplete data blocks routing, communication, and reliable reporting.",
+                    "recommended_action_reason": "The system recommends filling missing CRM data before more advanced action planning.",
+                    "risk_if_ignored": "The team can chase the wrong contact or lose the deal in reporting gaps.",
+                },
+                "prepare_offer": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' looks close to proposal work based on its current stage."
+                    ),
+                    "why_important": "Proposal-stage deals convert better when the commercial offer is prepared without delay.",
+                    "recommended_action_reason": "The system recommends preparing an offer because the stage suggests buyer evaluation is already happening.",
+                    "risk_if_ignored": "A slower response can push the buyer toward another option or freeze the conversation.",
+                },
+                "schedule_client_call": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' has a contact on file but still lacks a concrete next step."
+                    ),
+                    "why_important": "A ready contact lowers friction and makes a fast call one of the cheapest ways to recover momentum.",
+                    "recommended_action_reason": "The system recommends scheduling a client call because communication can start immediately.",
+                    "risk_if_ignored": "The opportunity can sit idle despite already having enough data to act.",
+                },
+                "revive_client_contact": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' appears cold because there is no next step and little useful context."
+                    ),
+                    "why_important": "Cold deals decay quickly and often need a deliberate reactivation touchpoint.",
+                    "recommended_action_reason": "The system recommends a revival action because passive waiting is unlikely to improve the situation.",
+                    "risk_if_ignored": "The opportunity may become effectively dead while still cluttering the active pipeline.",
+                },
+                "escalate_to_supervisor": {
+                    "summary": (
+                        f"Opportunity '{opportunity.title}' is high-value and warrants supervisor visibility."
+                    ),
+                    "why_important": "Large deals carry more upside and more risk, so tighter oversight is justified.",
+                    "recommended_action_reason": "The system recommends escalation to improve coordination and reduce execution mistakes.",
+                    "risk_if_ignored": "A high-value deal can slip without anyone noticing the growing risk early enough.",
+                },
+            }
+            details = explainability_map.get(
+                action.action_code,
+                {
+                    "summary": f"Opportunity '{opportunity.title}' triggered action '{action.action_name}'.",
+                    "why_important": "The system found a pattern that requires attention.",
+                    "recommended_action_reason": "This action best matches the current state of the opportunity.",
+                    "risk_if_ignored": "The opportunity can lose momentum or accuracy in the pipeline.",
+                },
+            )
 
             payload = {
-                "summary": summary,
-                "why_important": why_important,
+                "summary": details["summary"],
+                "why_important": details["why_important"],
                 "triggered_signals": (
                     f"state_code={opportunity.state_code}; action_code={action.action_code}; stage_id={opportunity.stage_id}; "
-                    f"next_step_empty={not bool((opportunity.next_step or '').strip())}"
+                    f"next_step_empty={not bool((opportunity.next_step or '').strip())}; "
+                    f"amount={_parse_amount(opportunity.opportunity_value)}; age_days={_age_in_days(opportunity.created_at)}"
                 ),
-                "recommended_action_reason": recommended_action_reason,
-                "risk_if_ignored": risk_if_ignored,
+                "recommended_action_reason": details["recommended_action_reason"],
+                "risk_if_ignored": details["risk_if_ignored"],
             }
 
             if existing is None:
@@ -418,6 +707,10 @@ def create_action_feedback(
     outcome_note: str,
 ) -> dict[str, object]:
     with Session(engine) as session:
+        action = session.query(OpportunityAction).filter_by(id=action_id).one_or_none()
+        if action is None:
+            raise RuntimeError(f"Action {action_id} not found")
+
         feedback = OpportunityActionFeedback(
             action_id=action_id,
             shown_to_role=shown_to_role,
@@ -427,6 +720,14 @@ def create_action_feedback(
             outcome_note=outcome_note,
         )
         session.add(feedback)
+        if executed == "yes":
+            action.status = "done"
+        elif decision == "accepted":
+            action.status = "accepted"
+        elif decision == "postponed":
+            action.status = "postponed"
+        elif decision == "rejected":
+            action.status = "rejected"
         session.commit()
         session.refresh(feedback)
 
@@ -487,6 +788,26 @@ def update_opportunity_next_step(engine: Engine, opportunity_id: int, next_step:
     }
 
 
+def update_action_status(engine: Engine, action_id: int, status: str) -> dict[str, object] | None:
+    with Session(engine) as session:
+        item = session.query(OpportunityAction).filter_by(id=action_id).one_or_none()
+        if item is None:
+            return None
+
+        item.status = status
+        session.commit()
+        session.refresh(item)
+
+    return {
+        "id": item.id,
+        "opportunity_id": item.opportunity_id,
+        "action_code": item.action_code,
+        "action_name": item.action_name,
+        "status": item.status,
+        "priority": item.priority,
+    }
+
+
 def recompute_opportunity_priority_scores(engine: Engine) -> dict[str, int]:
     updated = 0
 
@@ -496,24 +817,71 @@ def recompute_opportunity_priority_scores(engine: Engine) -> dict[str, int]:
         for item in items:
             score = 0
 
-            if item.state_code == "needs_attention":
-                score += 70
-            elif item.state_code == "in_progress":
-                score += 40
+            amount = _parse_amount(item.opportunity_value)
+            age_days = _age_in_days(item.created_at)
+            state_weights = {
+                "missing_data": 85,
+                "stalled": 82,
+                "needs_attention": 76,
+                "proposal_pending": 66,
+                "high_value_in_progress": 62,
+                "in_progress": 44,
+                "closed": 0,
+                "lost": 0,
+            }
+            score += state_weights.get(item.state_code, 25)
 
-            if item.stage_id == "NEW":
-                score += 20
-
-            if not (item.next_step or "").strip():
+            if _contains_any(item.stage_id, ("NEW",)):
                 score += 10
-            else:
-                score -= 15
+            if _contains_any(item.stage_id, ("PROPOSAL", "QUOTE", "PREPAR", "PRESENT")):
+                score += 12
 
-            if not (item.company_id or "").strip():
-                score -= 5
+            if amount >= 500000:
+                score += 30
+            elif amount >= 250000:
+                score += 22
+            elif amount >= 100000:
+                score += 14
+            elif amount > 0:
+                score += 6
+
+            if not _as_text(item.next_step):
+                score += 18
+            else:
+                score -= 10
+
+            if not _as_text(item.company_id):
+                score += 8
+            if not _as_text(item.contact_id):
+                score += 7
+            if not _as_text(item.last_comment):
+                score += 10
+            if age_days >= 30:
+                score += 12
+            elif age_days >= 14:
+                score += 7
+            elif age_days >= 7:
+                score += 3
+
+            feedback_summary = (
+                session.query(
+                    OpportunityActionFeedback.decision,
+                    text("count(*)"),
+                )
+                .join(OpportunityAction, OpportunityAction.id == OpportunityActionFeedback.action_id)
+                .filter(OpportunityAction.opportunity_id == item.id)
+                .group_by(OpportunityActionFeedback.decision)
+                .all()
+            )
+            feedback_counts = {decision: count for decision, count in feedback_summary}
+            score += int(feedback_counts.get("rejected", 0)) * 8
+            score += int(feedback_counts.get("postponed", 0)) * 5
+            score -= int(feedback_counts.get("accepted", 0)) * 4
 
             if score < 0:
                 score = 0
+            if score > 100:
+                score = 100
 
             new_priority_score = str(score)
             if item.priority_score != new_priority_score:
@@ -524,4 +892,156 @@ def recompute_opportunity_priority_scores(engine: Engine) -> dict[str, int]:
 
     return {
         "updated": updated,
+    }
+
+
+def build_dashboard_analytics(
+    raw_deals: list[dict[str, Any]],
+    opportunities: list[dict[str, Any]],
+    actions: list[dict[str, Any]],
+    feedback_items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    high_priority = sum(1 for item in opportunities if int(item.get("priority_score") or 0) >= 80)
+    without_next_step = sum(1 for item in opportunities if not _as_text(item.get("next_step")))
+    avg_priority = round(
+        sum(int(item.get("priority_score") or 0) for item in opportunities) / len(opportunities),
+        1,
+    ) if opportunities else 0.0
+
+    stage_counts: dict[str, int] = {}
+    for item in opportunities:
+        stage = _as_text(item.get("stage_id")) or "unknown"
+        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+
+    feedback_counts: dict[str, int] = {}
+    for item in feedback_items:
+        decision = _as_text(item.get("decision")) or "unknown"
+        feedback_counts[decision] = feedback_counts.get(decision, 0) + 1
+
+    action_status_counts: dict[str, int] = {}
+    for item in actions:
+        status = _as_text(item.get("status")) or "unknown"
+        action_status_counts[status] = action_status_counts.get(status, 0) + 1
+
+    funnel = build_funnel_analytics(raw_deals)
+
+    return {
+        "high_priority": high_priority,
+        "without_next_step": without_next_step,
+        "avg_priority": avg_priority,
+        "stage_counts": dict(sorted(stage_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:8]),
+        "feedback_counts": dict(sorted(feedback_counts.items(), key=lambda pair: (-pair[1], pair[0]))),
+        "action_status_counts": dict(sorted(action_status_counts.items(), key=lambda pair: (-pair[1], pair[0]))),
+        "funnel": funnel,
+    }
+
+
+def build_funnel_analytics(raw_deals: list[dict[str, Any]]) -> dict[str, Any]:
+    if not raw_deals:
+        return {
+            "initial_count": 0,
+            "won_count": 0,
+            "lost_count": 0,
+            "active_count": 0,
+            "overall_success_conversion_pct": 0.0,
+            "stages": [],
+            "failure_reasons": [],
+            "stage_failure_breakdown": [],
+        }
+
+    stage_map: dict[str, dict[str, Any]] = {}
+    weighted_reason_counts: dict[str, float] = {}
+    stage_reason_counts: dict[str, dict[str, float]] = {}
+    won_count = 0
+    lost_count = 0
+    active_count = 0
+
+    for deal in raw_deals:
+        raw_payload = dict(deal.get("raw_payload") or {})
+        stage_id = _as_text(raw_payload.get("STAGE_ID") or deal.get("stage_id")) or "UNKNOWN"
+        stage_entry = stage_map.setdefault(
+            stage_id,
+            {
+                "stage_id": stage_id,
+                "label": _stage_label(stage_id),
+                "count": 0,
+                "active_count": 0,
+                "won_count": 0,
+                "lost_count": 0,
+            },
+        )
+        stage_entry["count"] += 1
+
+        if _deal_is_won(raw_payload):
+            stage_entry["won_count"] += 1
+            won_count += 1
+        elif _deal_is_lost(raw_payload):
+            stage_entry["lost_count"] += 1
+            lost_count += 1
+            reasons = _extract_failure_reasons(raw_payload)
+            weight = round(1 / max(len(reasons), 1), 4)
+            stage_reason_bucket = stage_reason_counts.setdefault(stage_id, {})
+            for reason in reasons:
+                weighted_reason_counts[reason] = weighted_reason_counts.get(reason, 0.0) + weight
+                stage_reason_bucket[reason] = stage_reason_bucket.get(reason, 0.0) + weight
+        else:
+            stage_entry["active_count"] += 1
+            active_count += 1
+
+    ordered_stages = sorted(stage_map.values(), key=lambda item: _stage_rank(item["stage_id"]))
+    initial_count = max(int(ordered_stages[0]["count"]), 1)
+    previous_count = 0
+    stages: list[dict[str, Any]] = []
+
+    for item in ordered_stages:
+        count = int(item["count"])
+        stages.append(
+            {
+                **item,
+                "conversion_from_start_pct": _to_percent(count, initial_count),
+                "conversion_from_previous_pct": _to_percent(count, previous_count or initial_count),
+            }
+        )
+        previous_count = count
+
+    failure_reasons = [
+        {
+            "reason": reason,
+            "weighted_deals": round(weight, 2),
+            "share_of_lost_pct": _to_percent(weight, float(lost_count)),
+        }
+        for reason, weight in sorted(weighted_reason_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+    ]
+
+    stage_failure_breakdown = []
+    for stage in ordered_stages:
+        stage_id = stage["stage_id"]
+        stage_lost_count = int(stage["lost_count"])
+        stage_reasons = stage_reason_counts.get(stage_id, {})
+        stage_failure_breakdown.append(
+            {
+                "stage_id": stage_id,
+                "label": _stage_label(stage_id),
+                "lost_count": stage_lost_count,
+                "share_of_lost_pct": _to_percent(stage_lost_count, lost_count),
+                "failure_reasons": [
+                    {
+                        "reason": reason,
+                        "weighted_deals": round(weight, 2),
+                        "share_within_stage_losses_pct": _to_percent(weight, float(stage_lost_count)),
+                    }
+                    for reason, weight in sorted(stage_reasons.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+                ],
+            }
+        )
+
+    return {
+        "initial_count": len(raw_deals),
+        "won_count": won_count,
+        "lost_count": lost_count,
+        "active_count": active_count,
+        "overall_success_conversion_pct": _to_percent(won_count, len(raw_deals)),
+        "stages": stages,
+        "failure_reasons": failure_reasons,
+        "stage_failure_breakdown": stage_failure_breakdown,
     }

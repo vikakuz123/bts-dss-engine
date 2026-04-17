@@ -1,0 +1,41 @@
+services:
+  app:
+    build: .
+    container_name: bts-dss-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  postgres:
+    image: postgres:16
+    container_name: bts-dss-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bts_dss
+      POSTGRES_USER: bts_user
+      POSTGRES_PASSWORD: bts_password_change_me
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bts_user -d bts_dss"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    container_name: bts-dss-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+volumes:
+  postgres_data:
+  qdrant_data:
