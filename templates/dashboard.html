@@ -1,41 +1,41 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ app_name }} Dashboard</title>
+    <title>{{ app_name }} - Панель управления</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/dashboard.css') }}">
 </head>
 <body>
     <main class="page-shell">
         <section class="hero">
             <div class="hero-copy">
-                <p class="eyebrow">Decision Support Workspace</p>
+                <p class="eyebrow">Рабочее пространство DSS</p>
                 <h1>{{ app_name }}</h1>
                 <p class="lede">
-                    A live cockpit for Bitrix opportunities, recommendation logic, and manager feedback.
-                    This version adds filters, scoring, analytics, and quick actions so the DSS feels like an operating tool, not just an API demo.
+                    Живая рабочая панель для сделок Bitrix, логики рекомендаций и обратной связи от менеджера.
+                    Эта версия включает фильтры, скоринг, аналитику и быстрые действия, чтобы DSS работала как полноценный инструмент, а не только как демо API.
                 </p>
             </div>
             <div class="hero-panel">
                 <div class="meta-row">
-                    <span class="meta-label">Environment</span>
+                    <span class="meta-label">Среда</span>
                     <span class="meta-value">{{ app_env }}</span>
                 </div>
                 <div class="meta-row">
-                    <span class="meta-label">Visible opportunities</span>
+                    <span class="meta-label">Видимых сделок</span>
                     <span class="meta-value">{{ view.metrics.opportunities }}</span>
                 </div>
                 <div class="meta-row">
-                    <span class="meta-label">Recommended actions</span>
+                    <span class="meta-label">Рекомендованных действий</span>
                     <span class="meta-value">{{ view.metrics.actions }}</span>
                 </div>
                 <div class="meta-row">
-                    <span class="meta-label">Average priority</span>
+                    <span class="meta-label">Средний приоритет</span>
                     <span class="meta-value">{{ view.analytics.avg_priority }}</span>
                 </div>
                 <form method="post" action="/dashboard/run-pipeline">
-                    <button class="primary-button" type="submit">Refresh Bitrix Pipeline</button>
+                    <button class="primary-button" type="submit">Обновить воронку Bitrix</button>
                 </form>
             </div>
         </section>
@@ -43,28 +43,28 @@
         <section class="info-grid">
             <article class="info-card">
                 <div class="section-heading compact-heading">
-                    <h2>Testing Access</h2>
-                    <p>Interface published through a dedicated server port for testing.</p>
+                    <h2>Доступ для тестирования</h2>
+                    <p>Интерфейс опубликован через отдельный серверный порт для тестирования.</p>
                 </div>
                 <div class="info-stack">
                     <div class="info-line">
-                        <span class="info-label-inline">Dashboard</span>
+                        <span class="info-label-inline">Дашборд</span>
                         <a class="inline-link" href="{{ testing_access_url }}">{{ testing_access_url }}</a>
                     </div>
                     <div class="info-line">
-                        <span class="info-label-inline">Health</span>
+                        <span class="info-label-inline">Проверка сервиса</span>
                         <a class="inline-link" href="{{ health_url }}">{{ health_url }}</a>
                     </div>
                     <div class="info-line">
-                        <span class="info-label-inline">Analytics</span>
+                        <span class="info-label-inline">Аналитика</span>
                         <a class="inline-link" href="{{ analytics_url }}">{{ analytics_url }}</a>
                     </div>
                 </div>
             </article>
             <article class="info-card">
                 <div class="section-heading compact-heading">
-                    <h2>Interface Functions</h2>
-                    <p>Short overview for participants before testing.</p>
+                    <h2>Функции интерфейса</h2>
+                    <p>Краткий обзор возможностей для участников перед тестированием.</p>
                 </div>
                 <div class="feature-list">
                     {% for feature in feature_overview %}
@@ -79,25 +79,25 @@
 
         <section class="testing-section">
             <div class="section-heading">
-                <h2>Testing Tasks</h2>
-                <p>Practical checklist for the current testing round.</p>
+                <h2>Задачи тестирования</h2>
+                <p>Практический чек-лист на текущий этап тестирования.</p>
             </div>
             <div class="testing-grid">
                 <article class="testing-card">
-                    <strong>1. Open the published interface</strong>
-                    <p>Use the dashboard URL above and confirm that the page opens through the server port without errors.</p>
+                    <strong>1. Открыть опубликованный интерфейс</strong>
+                    <p>Используйте ссылку на дашборд выше и убедитесь, что страница открывается через серверный порт без ошибок.</p>
                 </article>
                 <article class="testing-card">
-                    <strong>2. Review interface functions</strong>
-                    <p>Check opportunity cards, funnel analytics, weighted loss breakdown, search, filters, and quick actions.</p>
+                    <strong>2. Изучить функции интерфейса</strong>
+                    <p>Проверьте карточки сделок, аналитику воронки, взвешенный анализ потерь, поиск, фильтры и быстрые действия.</p>
                 </article>
                 <article class="testing-card">
-                    <strong>3. Continue practical refinement</strong>
-                    <p>Update next steps, run the Bitrix pipeline, and verify that metrics and cards refresh consistently.</p>
+                    <strong>3. Продолжить практическую доработку</strong>
+                    <p>Обновляйте следующие шаги, запускайте воронку Bitrix и проверяйте, что метрики и карточки обновляются корректно.</p>
                 </article>
                 <article class="testing-card">
-                    <strong>4. Record and fix defects</strong>
-                    <p>Repeat UI testing, verify analytics endpoints, and eliminate any issues found during the test cycle.</p>
+                    <strong>4. Фиксировать и устранять ошибки</strong>
+                    <p>Повторяйте тестирование интерфейса, проверяйте аналитические эндпоинты и устраняйте найденные проблемы.</p>
                 </article>
             </div>
         </section>
@@ -105,67 +105,67 @@
         <section class="metric-grid">
             <article class="metric-card accent-amber">
                 <span class="metric-value">{{ view.metrics.raw_deals }}</span>
-                <span class="metric-label">Raw Bitrix deals</span>
+                <span class="metric-label">Сырые сделки Bitrix</span>
             </article>
             <article class="metric-card accent-blue">
                 <span class="metric-value">{{ view.metrics.opportunities }}</span>
-                <span class="metric-label">Visible opportunities</span>
+                <span class="metric-label">Видимые сделки</span>
             </article>
             <article class="metric-card accent-green">
                 <span class="metric-value">{{ view.analytics.high_priority }}</span>
-                <span class="metric-label">High-priority deals</span>
+                <span class="metric-label">Сделки высокого приоритета</span>
             </article>
             <article class="metric-card accent-rose">
                 <span class="metric-value">{{ view.analytics.funnel.overall_success_conversion_pct }}</span>
-                <span class="metric-label">Overall success conversion, %</span>
+                <span class="metric-label">Итоговая конверсия успеха, %</span>
             </article>
         </section>
 
         <section class="analytics-section">
             <div class="section-heading">
-                <h2>Sales Funnel</h2>
-                <p>Two stage-to-stage conversions plus weighted loss analysis by failure reason.</p>
+                <h2>Воронка продаж</h2>
+                <p>Два показателя конверсии между этапами и взвешенный анализ потерь по причинам отказа.</p>
             </div>
             <div class="analytics-grid analytics-grid-funnel">
                 <article class="analytics-card">
-                    <h3>Funnel totals</h3>
+                    <h3>Итоги воронки</h3>
                     <div class="mini-list">
                         <div class="mini-row">
-                            <span>Initial deals</span>
+                            <span>Первоначальные сделки</span>
                             <strong>{{ view.analytics.funnel.initial_count }}</strong>
                         </div>
                         <div class="mini-row">
-                            <span>Won deals</span>
+                            <span>Успешные сделки</span>
                             <strong>{{ view.analytics.funnel.won_count }}</strong>
                         </div>
                         <div class="mini-row">
-                            <span>Lost deals</span>
+                            <span>Проваленные сделки</span>
                             <strong>{{ view.analytics.funnel.lost_count }}</strong>
                         </div>
                         <div class="mini-row">
-                            <span>Active deals</span>
+                            <span>Сделки в работе</span>
                             <strong>{{ view.analytics.funnel.active_count }}</strong>
                         </div>
                         <div class="mini-row">
-                            <span>Success conversion</span>
+                            <span>Итоговая конверсия</span>
                             <strong>{{ view.analytics.funnel.overall_success_conversion_pct }}%</strong>
                         </div>
                     </div>
                 </article>
                 <article class="analytics-card analytics-card-wide">
-                    <h3>Stage conversions</h3>
+                    <h3>Конверсия по этапам</h3>
                     {% if view.analytics.funnel.stages %}
                     <div class="table-wrap">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Stage</th>
-                                    <th>Deals</th>
-                                    <th>From initial, %</th>
-                                    <th>From previous, %</th>
-                                    <th>Won</th>
-                                    <th>Lost</th>
-                                    <th>Active</th>
+                                    <th>Этап</th>
+                                    <th>Сделок</th>
+                                    <th>От начального, %</th>
+                                    <th>От предыдущего, %</th>
+                                    <th>Успешных</th>
+                                    <th>Проваленных</th>
+                                    <th>В работе</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -184,44 +184,44 @@
                         </table>
                     </div>
                     {% else %}
-                    <p class="empty-state">No funnel data yet.</p>
+                    <p class="empty-state">Данные по воронке пока отсутствуют.</p>
                     {% endif %}
                 </article>
             </div>
             <div class="analytics-grid analytics-grid-funnel-secondary">
                 <article class="analytics-card">
-                    <h3>Weighted loss reasons</h3>
+                    <h3>Взвешенные причины потерь</h3>
                     <div class="mini-list">
                         {% for reason in view.analytics.funnel.failure_reasons %}
                         <div class="mini-row mini-row-stack">
                             <span>{{ reason.reason }}</span>
-                            <strong>{{ reason.weighted_deals }} deals / {{ reason.share_of_lost_pct }}%</strong>
+                            <strong>{{ reason.weighted_deals }} сделок / {{ reason.share_of_lost_pct }}%</strong>
                         </div>
                         {% else %}
-                        <p class="empty-state">No failed deals yet.</p>
+                        <p class="empty-state">Проваленных сделок пока нет.</p>
                         {% endfor %}
                     </div>
                 </article>
                 <article class="analytics-card analytics-card-wide">
-                    <h3>Losses by stage</h3>
+                    <h3>Потери по этапам</h3>
                     <div class="mini-list">
                         {% for stage in view.analytics.funnel.stage_failure_breakdown if stage.lost_count %}
                         <div class="stage-loss-card">
                             <div class="mini-row">
                                 <span>{{ stage.label }}</span>
-                                <strong>{{ stage.lost_count }} lost / {{ stage.share_of_lost_pct }}%</strong>
+                                <strong>{{ stage.lost_count }} потеряно / {{ stage.share_of_lost_pct }}%</strong>
                             </div>
                             <div class="mini-list nested-mini-list">
                                 {% for reason in stage.failure_reasons %}
                                 <div class="mini-row mini-row-stack">
                                     <span>{{ reason.reason }}</span>
-                                    <strong>{{ reason.weighted_deals }} weight / {{ reason.share_within_stage_losses_pct }}%</strong>
+                                    <strong>{{ reason.weighted_deals }} вес / {{ reason.share_within_stage_losses_pct }}%</strong>
                                 </div>
                                 {% endfor %}
                             </div>
                         </div>
                         {% else %}
-                        <p class="empty-state">No stage-level loss breakdown yet.</p>
+                        <p class="empty-state">Разбивки потерь по этапам пока нет.</p>
                         {% endfor %}
                     </div>
                 </article>
@@ -230,64 +230,64 @@
 
         <section class="filter-section">
             <div class="section-heading">
-                <h2>Filters and Search</h2>
-                <p>Focus the board on the deals that actually need attention right now.</p>
+                <h2>Фильтры и поиск</h2>
+                <p>Сфокусируйте доску на тех сделках, которым сейчас действительно нужно внимание.</p>
             </div>
             <form class="filter-grid" method="get" action="/dashboard">
                 <label>
-                    Search
-                    <input type="text" name="search" value="{{ view.filters.search }}" placeholder="Deal title, ID, company, comment">
+                    Поиск
+                    <input type="text" name="search" value="{{ view.filters.search }}" placeholder="Название сделки, ID, компания, комментарий">
                 </label>
                 <label>
-                    State
+                    Статус
                     <select name="state">
-                        <option value="">All states</option>
+                        <option value="">Все статусы</option>
                         {% for state in view.available_states %}
                         <option value="{{ state }}" {% if view.filters.state == state %}selected{% endif %}>{{ state }}</option>
                         {% endfor %}
                     </select>
                 </label>
                 <label>
-                    Stage
+                    Этап
                     <select name="stage">
-                        <option value="">All stages</option>
+                        <option value="">Все этапы</option>
                         {% for stage in view.available_stages %}
                         <option value="{{ stage }}" {% if view.filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
                         {% endfor %}
                     </select>
                 </label>
                 <label>
-                    Priority
+                    Приоритет
                     <select name="priority">
-                        <option value="">All bands</option>
-                        <option value="high" {% if view.filters.priority == "high" %}selected{% endif %}>high</option>
-                        <option value="medium" {% if view.filters.priority == "medium" %}selected{% endif %}>medium</option>
-                        <option value="low" {% if view.filters.priority == "low" %}selected{% endif %}>low</option>
+                        <option value="">Все уровни</option>
+                        <option value="high" {% if view.filters.priority == "high" %}selected{% endif %}>высокий</option>
+                        <option value="medium" {% if view.filters.priority == "medium" %}selected{% endif %}>средний</option>
+                        <option value="low" {% if view.filters.priority == "low" %}selected{% endif %}>низкий</option>
                     </select>
                 </label>
                 <label>
-                    Next step
+                    Следующий шаг
                     <select name="next_step">
-                        <option value="">Any</option>
-                        <option value="missing" {% if view.filters.next_step == "missing" %}selected{% endif %}>missing</option>
-                        <option value="present" {% if view.filters.next_step == "present" %}selected{% endif %}>present</option>
+                        <option value="">Любой</option>
+                        <option value="missing" {% if view.filters.next_step == "missing" %}selected{% endif %}>не задан</option>
+                        <option value="present" {% if view.filters.next_step == "present" %}selected{% endif %}>задан</option>
                     </select>
                 </label>
                 <div class="filter-actions">
-                    <button class="secondary-button" type="submit">Apply filters</button>
-                    <a class="ghost-link" href="/dashboard">Reset</a>
+                    <button class="secondary-button" type="submit">Применить фильтры</button>
+                    <a class="ghost-link" href="/dashboard">Сбросить</a>
                 </div>
             </form>
         </section>
 
         <section class="analytics-section">
             <div class="section-heading">
-                <h2>Pipeline Analytics</h2>
-                <p>Useful for demo, operations review, and coursework screenshots.</p>
+                <h2>Аналитика воронки</h2>
+                <p>Подходит для демонстрации, операционного анализа и скриншотов для учебной работы.</p>
             </div>
             <div class="analytics-grid">
                 <article class="analytics-card">
-                    <h3>Top stages</h3>
+                    <h3>Основные этапы</h3>
                     <div class="mini-list">
                         {% for stage, count in view.analytics.stage_counts.items() %}
                         <div class="mini-row">
@@ -298,28 +298,28 @@
                     </div>
                 </article>
                 <article class="analytics-card">
-                    <h3>Feedback decisions</h3>
+                    <h3>Решения по обратной связи</h3>
                     <div class="mini-list">
                         {% for decision, count in view.analytics.feedback_counts.items() %}
                         <div class="mini-row">
-                            <span>{{ decision }}</span>
+                            <span>{{ ui_labels.decision.get(decision, decision) }}</span>
                             <strong>{{ count }}</strong>
                         </div>
                         {% else %}
-                        <p class="empty-state">No feedback yet.</p>
+                        <p class="empty-state">Обратной связи пока нет.</p>
                         {% endfor %}
                     </div>
                 </article>
                 <article class="analytics-card">
-                    <h3>Action statuses</h3>
+                    <h3>Статусы действий</h3>
                     <div class="mini-list">
                         {% for status, count in view.analytics.action_status_counts.items() %}
                         <div class="mini-row">
-                            <span>{{ status }}</span>
+                            <span>{{ ui_labels.action_status.get(status, status) }}</span>
                             <strong>{{ count }}</strong>
                         </div>
                         {% else %}
-                        <p class="empty-state">No actions yet.</p>
+                        <p class="empty-state">Действий пока нет.</p>
                         {% endfor %}
                     </div>
                 </article>
@@ -328,14 +328,14 @@
 
         <section class="state-section">
             <div class="section-heading">
-                <h2>State Overview</h2>
-                <p>Quick visibility into where the pipeline is getting stuck.</p>
+                <h2>Обзор состояний</h2>
+                <p>Быстрый обзор того, на каких участках воронка начинает тормозить.</p>
             </div>
             <div class="state-pills">
                 {% for state, count in view.state_counts.items() %}
                 <span class="state-pill">
                     <strong>{{ count }}</strong>
-                    <span>{{ state }}</span>
+                    <span>{{ ui_labels.state.get(state, state) }}</span>
                 </span>
                 {% endfor %}
             </div>
@@ -343,8 +343,8 @@
 
         <section class="table-section">
             <div class="section-heading">
-                <h2>Opportunity Board</h2>
-                <p>Sorted by priority so the most urgent deals float to the top.</p>
+                <h2>Доска сделок</h2>
+                <p>Сделки отсортированы по приоритету, чтобы самые срочные были наверху.</p>
             </div>
 
             {% if view.opportunities %}
@@ -353,54 +353,54 @@
                 <article class="opportunity-card">
                     <header class="opportunity-header">
                         <div>
-                            <p class="deal-id">Deal #{{ opportunity.source_deal_id }}</p>
-                            <h3>{{ opportunity.title or "Untitled opportunity" }}</h3>
+                            <p class="deal-id">Сделка #{{ opportunity.source_deal_id }}</p>
+                            <h3>{{ opportunity.title or "Сделка без названия" }}</h3>
                         </div>
                         <div class="priority-chip priority-chip-{{ opportunity.priority_band }}">
-                            <span>Priority</span>
+                            <span>Приоритет</span>
                             <strong>{{ opportunity.priority_score_value }}</strong>
                         </div>
                     </header>
 
                     <div class="opportunity-grid">
                         <div class="info-block">
-                            <span class="info-label">Stage</span>
-                            <span class="info-value">{{ opportunity.stage_id or "not set" }}</span>
+                            <span class="info-label">Этап</span>
+                            <span class="info-value">{{ opportunity.stage_id or "не задан" }}</span>
                         </div>
                         <div class="info-block">
-                            <span class="info-label">State</span>
-                            <span class="info-value">{{ opportunity.state_code or "unknown" }}</span>
+                            <span class="info-label">Статус</span>
+                            <span class="info-value">{{ ui_labels.state.get(opportunity.state_code, opportunity.state_code) if opportunity.state_code else "неизвестно" }}</span>
                         </div>
                         <div class="info-block">
-                            <span class="info-label">Company / Contact</span>
-                            <span class="info-value">{{ opportunity.company_id or "missing" }} / {{ opportunity.contact_id or "missing" }}</span>
+                            <span class="info-label">Компания / Контакт</span>
+                            <span class="info-value">{{ opportunity.company_id or "нет данных" }} / {{ opportunity.contact_id or "нет данных" }}</span>
                         </div>
                         <div class="info-block">
-                            <span class="info-label">Value / Age</span>
-                            <span class="info-value">{{ opportunity.opportunity_value or "0" }} {{ opportunity.currency_id or "" }} / {{ opportunity.age_days }}d</span>
+                            <span class="info-label">Сумма / Возраст</span>
+                            <span class="info-value">{{ opportunity.opportunity_value or "0" }} {{ opportunity.currency_id or "" }} / {{ opportunity.age_days }} дн.</span>
                         </div>
                     </div>
 
                     <div class="comment-box">
-                        <span class="info-label">Last comment</span>
-                        <p>{{ opportunity.last_comment or "No comment from Bitrix yet." }}</p>
+                        <span class="info-label">Последний комментарий</span>
+                        <p>{{ opportunity.last_comment or "Комментарий из Bitrix пока отсутствует." }}</p>
                     </div>
 
                     <form class="next-step-form" method="post" action="/dashboard/opportunities/{{ opportunity.id }}/next-step">
-                        <label for="next-step-{{ opportunity.id }}">Next step</label>
+                        <label for="next-step-{{ opportunity.id }}">Следующий шаг</label>
                         <textarea
                             id="next-step-{{ opportunity.id }}"
                             name="next_step"
                             rows="3"
-                            placeholder="Describe the next manager action"
+                            placeholder="Опишите следующее действие менеджера"
                         >{{ opportunity.next_step or "" }}</textarea>
-                        <button class="secondary-button" type="submit">Save next step and recompute</button>
+                        <button class="secondary-button" type="submit">Сохранить шаг и пересчитать</button>
                     </form>
 
                     <div class="action-list">
                         <div class="subheading-row">
-                            <h4>Recommended actions</h4>
-                            <span>{{ opportunity.actions|length }} items</span>
+                            <h4>Рекомендованные действия</h4>
+                            <span>{{ opportunity.actions|length }} шт.</span>
                         </div>
                         {% if opportunity.actions %}
                             {% for action in opportunity.actions %}
@@ -411,36 +411,36 @@
                                         <p>{{ action.reason }}</p>
                                     </div>
                                     <div class="action-tags">
-                                        <span class="action-priority priority-{{ action.priority }}">{{ action.priority }}</span>
-                                        <span class="status-pill status-{{ action.status|replace('_', '-') }}">{{ action.status }}</span>
+                                        <span class="action-priority priority-{{ action.priority }}">{{ ui_labels.priority.get(action.priority, action.priority) }}</span>
+                                        <span class="status-pill status-{{ action.status|replace('_', '-') }}">{{ ui_labels.action_status.get(action.status, action.status) }}</span>
                                     </div>
                                 </div>
 
                                 {% if action.explainability %}
                                 <div class="explainability-box">
-                                    <p><strong>Summary:</strong> {{ action.explainability.summary }}</p>
-                                    <p><strong>Why important:</strong> {{ action.explainability.why_important }}</p>
-                                    <p><strong>Reason:</strong> {{ action.explainability.recommended_action_reason }}</p>
-                                    <p><strong>Risk:</strong> {{ action.explainability.risk_if_ignored }}</p>
+                                    <p><strong>Сводка:</strong> {{ action.explainability.summary }}</p>
+                                    <p><strong>Почему это важно:</strong> {{ action.explainability.why_important }}</p>
+                                    <p><strong>Причина рекомендации:</strong> {{ action.explainability.recommended_action_reason }}</p>
+                                    <p><strong>Риск при игнорировании:</strong> {{ action.explainability.risk_if_ignored }}</p>
                                 </div>
                                 {% endif %}
 
                                 <div class="quick-actions">
                                     <form method="post" action="/dashboard/actions/{{ action.id }}/status">
                                         <input type="hidden" name="status" value="accepted">
-                                        <button class="tiny-button" type="submit">Accept</button>
+                                        <button class="tiny-button" type="submit">Принять</button>
                                     </form>
                                     <form method="post" action="/dashboard/actions/{{ action.id }}/status">
                                         <input type="hidden" name="status" value="postponed">
-                                        <button class="tiny-button" type="submit">Postpone</button>
+                                        <button class="tiny-button" type="submit">Отложить</button>
                                     </form>
                                     <form method="post" action="/dashboard/actions/{{ action.id }}/status">
                                         <input type="hidden" name="status" value="done">
-                                        <button class="tiny-button" type="submit">Mark done</button>
+                                        <button class="tiny-button" type="submit">Выполнено</button>
                                     </form>
                                     <form method="post" action="/dashboard/actions/{{ action.id }}/status">
                                         <input type="hidden" name="status" value="rejected">
-                                        <button class="tiny-button" type="submit">Reject</button>
+                                        <button class="tiny-button" type="submit">Отклонить</button>
                                     </form>
                                 </div>
 
@@ -448,38 +448,38 @@
                                     <input type="hidden" name="shown_to_role" value="manager">
                                     <div class="feedback-grid">
                                         <label>
-                                            Decision
+                                            Решение
                                             <select name="decision">
-                                                <option value="accepted">accepted</option>
-                                                <option value="rejected">rejected</option>
-                                                <option value="postponed">postponed</option>
+                                                <option value="accepted">принято</option>
+                                                <option value="rejected">отклонено</option>
+                                                <option value="postponed">отложено</option>
                                             </select>
                                         </label>
                                         <label>
-                                            Executed
+                                            Исполнено
                                             <select name="executed">
-                                                <option value="no">no</option>
-                                                <option value="yes">yes</option>
+                                                <option value="no">нет</option>
+                                                <option value="yes">да</option>
                                             </select>
                                         </label>
                                     </div>
                                     <label>
-                                        Rejection reason
-                                        <input type="text" name="rejection_reason" placeholder="Only if rejected">
+                                        Причина отклонения
+                                        <input type="text" name="rejection_reason" placeholder="Заполняется только при отклонении">
                                     </label>
                                     <label>
-                                        Outcome note
-                                        <input type="text" name="outcome_note" placeholder="What happened after the action">
+                                        Комментарий по результату
+                                        <input type="text" name="outcome_note" placeholder="Что произошло после выполнения действия">
                                     </label>
                                     <div class="feedback-footer">
-                                        <span>{{ action.feedback_count }} feedback records</span>
-                                        <button class="ghost-button" type="submit">Submit feedback</button>
+                                        <span>{{ action.feedback_count }} записей обратной связи</span>
+                                        <button class="ghost-button" type="submit">Отправить обратную связь</button>
                                     </div>
                                 </form>
                             </section>
                             {% endfor %}
                         {% else %}
-                        <p class="empty-state">No actions yet. Run the pipeline or save a next step to generate recommendations.</p>
+                        <p class="empty-state">Рекомендаций пока нет. Запустите воронку или сохраните следующий шаг, чтобы сгенерировать действия.</p>
                         {% endif %}
                     </div>
                 </article>
@@ -487,8 +487,8 @@
             </div>
             {% else %}
             <article class="empty-panel">
-                <h3>No opportunities matched the current filters</h3>
-                <p>Try resetting filters or run the pipeline to ingest more Bitrix data.</p>
+                <h3>По текущим фильтрам сделки не найдены</h3>
+                <p>Попробуйте сбросить фильтры или запустить воронку для загрузки дополнительных данных из Bitrix.</p>
             </article>
             {% endif %}
         </section>

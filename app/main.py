@@ -180,22 +180,56 @@ def build_dashboard_view_model(filters: dict[str, str]) -> dict[str, object]:
 def build_interface_feature_overview() -> list[dict[str, str]]:
     return [
         {
-            "title": "Opportunity Monitoring",
-            "description": "View deal cards, current stages, priority levels, values, comments, and next-step planning in one workspace.",
+            "title": "Мониторинг сделок",
+            "description": "Просматривайте карточки сделок, текущие этапы, приоритеты, суммы, комментарии и план следующих шагов в одном окне.",
         },
         {
-            "title": "Sales Funnel Analytics",
-            "description": "Track stage counts, conversion from the initial volume, conversion from the previous stage, and overall success rate.",
+            "title": "Аналитика воронки продаж",
+            "description": "Отслеживайте количество сделок по этапам, конверсию от начального объема, конверсию от предыдущего этапа и итоговую успешность.",
         },
         {
-            "title": "Loss Analysis",
-            "description": "Break down failed deals by stage and weighted failure reasons to understand where and why the funnel loses deals.",
+            "title": "Анализ потерь",
+            "description": "Разбирайте проваленные сделки по этапам и по взвешенным причинам отказа, чтобы понимать, где и почему теряются сделки.",
         },
         {
-            "title": "Testing Workflow",
-            "description": "Refresh Bitrix data, recalculate analytics, submit feedback, and verify interface behavior directly from the dashboard.",
+            "title": "Рабочий контур тестирования",
+            "description": "Обновляйте данные Bitrix, пересчитывайте аналитику, отправляйте обратную связь и проверяйте поведение интерфейса прямо из дашборда.",
         },
     ]
+
+
+def build_ui_label_maps() -> dict[str, dict[str, str]]:
+    return {
+        "priority": {
+            "high": "высокий",
+            "medium": "средний",
+            "low": "низкий",
+        },
+        "action_status": {
+            "open": "открыто",
+            "accepted": "принято",
+            "postponed": "отложено",
+            "done": "выполнено",
+            "rejected": "отклонено",
+        },
+        "decision": {
+            "accepted": "принято",
+            "rejected": "отклонено",
+            "postponed": "отложено",
+        },
+        "executed": {
+            "yes": "да",
+            "no": "нет",
+        },
+        "state": {
+            "new": "новая",
+            "active": "в работе",
+            "won": "успешная",
+            "lost": "провалена",
+            "stalled": "зависла",
+            "unknown": "неизвестно",
+        },
+    }
 
 
 @app.get("/")
@@ -224,6 +258,7 @@ def dashboard(request: Request):
             "app_env": settings.app_env,
             "view": build_dashboard_view_model(filters),
             "feature_overview": build_interface_feature_overview(),
+            "ui_labels": build_ui_label_maps(),
             "testing_access_url": str(request.url_for("dashboard")),
             "health_url": str(request.url_for("health")),
             "analytics_url": str(request.url_for("get_analytics_summary")),
