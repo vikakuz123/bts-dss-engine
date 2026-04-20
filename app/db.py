@@ -400,9 +400,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "request_missing_data",
                         {
-                            "action_name": "Request missing CRM data",
+                            "action_name": "Запросить недостающие данные CRM",
                             "target_role": "sales_ops",
-                            "reason": "Opportunity is missing company or contact linkage and cannot move safely.",
+                            "reason": "У сделки отсутствует привязка к компании или контакту, поэтому ее нельзя безопасно двигать дальше.",
                             "priority": "high",
                             "status": "open",
                         },
@@ -413,9 +413,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "follow_up_manager",
                         {
-                            "action_name": "Follow up with manager",
+                            "action_name": "Связаться с менеджером",
                             "target_role": "manager",
-                            "reason": "Opportunity has no clear next step and needs a human owner to move it forward.",
+                            "reason": "У сделки нет понятного следующего шага, поэтому нужен ответственный менеджер, чтобы сдвинуть ее вперед.",
                             "priority": "high",
                             "status": "open",
                         },
@@ -426,9 +426,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "revive_client_contact",
                         {
-                            "action_name": "Revive client contact",
+                            "action_name": "Возобновить контакт с клиентом",
                             "target_role": "manager",
-                            "reason": "No next step and no useful recent context were found, so the deal risks going cold.",
+                            "reason": "Следующий шаг не определен и свежего полезного контекста нет, поэтому сделка рискует остыть.",
                             "priority": "high",
                             "status": "open",
                         },
@@ -439,9 +439,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "monitor_progress",
                         {
-                            "action_name": "Monitor progress",
+                            "action_name": "Контролировать продвижение",
                             "target_role": "manager",
-                            "reason": "Opportunity already has a next step and should be monitored for execution.",
+                            "reason": "У сделки уже есть следующий шаг, поэтому сейчас важно контролировать его выполнение.",
                             "priority": "normal",
                             "status": "open",
                         },
@@ -452,9 +452,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "prepare_offer",
                         {
-                            "action_name": "Prepare commercial offer",
+                            "action_name": "Подготовить коммерческое предложение",
                             "target_role": "manager",
-                            "reason": "The deal appears close to proposal work and needs a concrete offer or presentation.",
+                            "reason": "Сделка близка к этапу предложения и требует конкретного оффера или презентации.",
                             "priority": "high" if amount >= 100000 else "normal",
                             "status": "open",
                         },
@@ -465,9 +465,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "schedule_client_call",
                         {
-                            "action_name": "Schedule client call",
+                            "action_name": "Запланировать звонок клиенту",
                             "target_role": "manager",
-                            "reason": "A contact exists, but the next concrete action is still missing.",
+                            "reason": "Контакт уже есть, но конкретное следующее действие по сделке все еще не определено.",
                             "priority": "normal",
                             "status": "open",
                         },
@@ -478,9 +478,9 @@ def build_actions_from_opportunities(engine: Engine) -> dict[str, int]:
                     (
                         "escalate_to_supervisor",
                         {
-                            "action_name": "Escalate to supervisor",
+                            "action_name": "Эскалировать руководителю",
                             "target_role": "supervisor",
-                            "reason": "High-value opportunity deserves oversight to reduce execution risk.",
+                            "reason": "Сделка с высокой ценностью требует контроля со стороны руководителя для снижения риска исполнения.",
                             "priority": "high",
                             "status": "open",
                         },
@@ -571,69 +571,69 @@ def build_explainability_from_actions(engine: Engine) -> dict[str, int]:
             explainability_map: dict[str, dict[str, str]] = {
                 "monitor_progress": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' already has a next step and remains active "
-                        f"in stage '{opportunity.stage_id}'."
+                        f"У сделки '{opportunity.title}' уже есть следующий шаг, и она остается активной "
+                        f"на этапе '{opportunity.stage_id}'."
                     ),
-                    "why_important": "Execution risk is now more important than ideation risk, so follow-through matters most.",
-                    "recommended_action_reason": "The system recommends monitoring rather than re-planning because a concrete next action already exists.",
-                    "risk_if_ignored": "The deal can quietly stall if the planned follow-up is never checked.",
+                    "why_important": "Сейчас риск исполнения важнее риска планирования, поэтому критично именно доведение действия до результата.",
+                    "recommended_action_reason": "Система рекомендует контролировать выполнение, а не перепланировать, потому что конкретный следующий шаг уже задан.",
+                    "risk_if_ignored": "Сделка может незаметно застопориться, если выполнение запланированного действия никто не проверит.",
                 },
                 "follow_up_manager": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' has no dependable next step in stage '{opportunity.stage_id}'."
+                        f"У сделки '{opportunity.title}' нет надежно определенного следующего шага на этапе '{opportunity.stage_id}'."
                     ),
-                    "why_important": "Without an owner-driven next action, even a promising deal loses momentum quickly.",
-                    "recommended_action_reason": "The system recommends manager follow-up to restore ownership and define the next move.",
-                    "risk_if_ignored": "The opportunity may remain open in CRM but stop moving in reality.",
+                    "why_important": "Без следующего действия, закрепленного за ответственным, даже перспективная сделка быстро теряет импульс.",
+                    "recommended_action_reason": "Система рекомендует подключение менеджера, чтобы вернуть ответственность за сделку и определить следующий шаг.",
+                    "risk_if_ignored": "Сделка может оставаться открытой в CRM, но фактически перестать двигаться.",
                 },
                 "request_missing_data": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' is missing critical CRM linkage such as company or contact data."
+                        f"У сделки '{opportunity.title}' отсутствуют критически важные CRM-данные, например привязка к компании или контакту."
                     ),
-                    "why_important": "Incomplete data blocks routing, communication, and reliable reporting.",
-                    "recommended_action_reason": "The system recommends filling missing CRM data before more advanced action planning.",
-                    "risk_if_ignored": "The team can chase the wrong contact or lose the deal in reporting gaps.",
+                    "why_important": "Неполные данные блокируют маршрутизацию, коммуникацию и корректную отчетность.",
+                    "recommended_action_reason": "Система рекомендует сначала заполнить недостающие CRM-данные, а уже потом переходить к более сложному планированию действий.",
+                    "risk_if_ignored": "Команда может работать не с тем контактом или потерять сделку из-за пробелов в данных и отчетности.",
                 },
                 "prepare_offer": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' looks close to proposal work based on its current stage."
+                        f"Сделка '{opportunity.title}' по своему текущему этапу близка к подготовке предложения."
                     ),
-                    "why_important": "Proposal-stage deals convert better when the commercial offer is prepared without delay.",
-                    "recommended_action_reason": "The system recommends preparing an offer because the stage suggests buyer evaluation is already happening.",
-                    "risk_if_ignored": "A slower response can push the buyer toward another option or freeze the conversation.",
+                    "why_important": "Сделки на стадии предложения конвертируются лучше, когда коммерческое предложение готовится без задержек.",
+                    "recommended_action_reason": "Система рекомендует подготовить предложение, потому что текущий этап показывает, что клиент уже находится в процессе оценки вариантов.",
+                    "risk_if_ignored": "Медленная реакция может подтолкнуть клиента к другому варианту или заморозить переговоры.",
                 },
                 "schedule_client_call": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' has a contact on file but still lacks a concrete next step."
+                        f"У сделки '{opportunity.title}' уже есть контакт, но по ней все еще не определен конкретный следующий шаг."
                     ),
-                    "why_important": "A ready contact lowers friction and makes a fast call one of the cheapest ways to recover momentum.",
-                    "recommended_action_reason": "The system recommends scheduling a client call because communication can start immediately.",
-                    "risk_if_ignored": "The opportunity can sit idle despite already having enough data to act.",
+                    "why_important": "Наличие готового контакта снижает барьер для действия, а быстрый звонок часто является самым простым способом вернуть импульс сделке.",
+                    "recommended_action_reason": "Система рекомендует запланировать звонок клиенту, потому что коммуникацию можно начать немедленно.",
+                    "risk_if_ignored": "Сделка может простаивать, хотя данных для действия уже достаточно.",
                 },
                 "revive_client_contact": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' appears cold because there is no next step and little useful context."
+                        f"Сделка '{opportunity.title}' выглядит остывшей, потому что по ней нет следующего шага и почти нет полезного актуального контекста."
                     ),
-                    "why_important": "Cold deals decay quickly and often need a deliberate reactivation touchpoint.",
-                    "recommended_action_reason": "The system recommends a revival action because passive waiting is unlikely to improve the situation.",
-                    "risk_if_ignored": "The opportunity may become effectively dead while still cluttering the active pipeline.",
+                    "why_important": "Остывшие сделки быстро теряют шансы и часто требуют отдельного действия для реактивации.",
+                    "recommended_action_reason": "Система рекомендует реактивацию контакта, потому что пассивное ожидание вряд ли улучшит ситуацию.",
+                    "risk_if_ignored": "Сделка может фактически умереть, продолжая при этом засорять активную воронку.",
                 },
                 "escalate_to_supervisor": {
                     "summary": (
-                        f"Opportunity '{opportunity.title}' is high-value and warrants supervisor visibility."
+                        f"Сделка '{opportunity.title}' имеет высокую ценность и требует внимания руководителя."
                     ),
-                    "why_important": "Large deals carry more upside and more risk, so tighter oversight is justified.",
-                    "recommended_action_reason": "The system recommends escalation to improve coordination and reduce execution mistakes.",
-                    "risk_if_ignored": "A high-value deal can slip without anyone noticing the growing risk early enough.",
+                    "why_important": "Крупные сделки дают больший потенциал, но и несут больше риска, поэтому усиленный контроль здесь оправдан.",
+                    "recommended_action_reason": "Система рекомендует эскалацию, чтобы улучшить координацию и снизить вероятность ошибок исполнения.",
+                    "risk_if_ignored": "Ценная сделка может сорваться до того, как кто-то вовремя заметит растущий риск.",
                 },
             }
             details = explainability_map.get(
                 action.action_code,
                 {
-                    "summary": f"Opportunity '{opportunity.title}' triggered action '{action.action_name}'.",
-                    "why_important": "The system found a pattern that requires attention.",
-                    "recommended_action_reason": "This action best matches the current state of the opportunity.",
-                    "risk_if_ignored": "The opportunity can lose momentum or accuracy in the pipeline.",
+                    "summary": f"Для сделки '{opportunity.title}' было сформировано действие '{action.action_name}'.",
+                    "why_important": "Система обнаружила паттерн, который требует внимания.",
+                    "recommended_action_reason": "Это действие лучше всего соответствует текущему состоянию сделки.",
+                    "risk_if_ignored": "Сделка может потерять импульс или корректность прохождения по воронке.",
                 },
             )
 
