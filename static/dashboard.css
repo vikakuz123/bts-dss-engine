@@ -40,14 +40,17 @@ body {
 
 .hero-copy,
 .hero-panel,
+.info-card,
 .metric-card,
 .filter-section,
 .analytics-section,
+.testing-section,
 .state-section,
 .table-section,
 .opportunity-card,
 .empty-panel,
-.analytics-card {
+.analytics-card,
+.testing-card {
     background: rgba(255, 253, 248, 0.9);
     border: 1px solid var(--line);
     border-radius: 24px;
@@ -150,7 +153,9 @@ body {
 }
 
 .metric-grid,
-.analytics-grid {
+.analytics-grid,
+.info-grid,
+.testing-grid {
     margin-top: 24px;
     display: grid;
     gap: 18px;
@@ -164,6 +169,14 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.info-grid {
+    grid-template-columns: 0.95fr 1.45fr;
+}
+
+.testing-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .analytics-grid-funnel {
     grid-template-columns: 0.9fr 1.6fr;
 }
@@ -173,7 +186,9 @@ body {
 }
 
 .metric-card,
-.analytics-card {
+.analytics-card,
+.info-card,
+.testing-card {
     padding: 22px;
     display: flex;
     flex-direction: column;
@@ -207,6 +222,7 @@ body {
 
 .filter-section,
 .analytics-section,
+.testing-section,
 .state-section,
 .table-section {
     margin-top: 24px;
@@ -225,6 +241,66 @@ body {
 .subheading-row h4,
 .analytics-card h3 {
     margin: 0;
+}
+
+.compact-heading {
+    margin-bottom: 12px;
+}
+
+.info-stack,
+.feature-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.info-line {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+}
+
+.info-label-inline {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.inline-link {
+    color: var(--blue);
+    word-break: break-all;
+    text-decoration: none;
+}
+
+.inline-link:hover {
+    text-decoration: underline;
+}
+
+.feature-item {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: #fffaf2;
+}
+
+.feature-item strong,
+.testing-card strong {
+    display: block;
+    margin-bottom: 8px;
+}
+
+.feature-item p,
+.testing-card p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.testing-card {
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: var(--paper);
 }
 
 .section-heading p,
@@ -519,6 +595,8 @@ textarea {
     .hero,
     .metric-grid,
     .analytics-grid,
+    .info-grid,
+    .testing-grid,
     .board {
         grid-template-columns: 1fr;
     }
@@ -541,8 +619,10 @@ textarea {
 
     .hero-copy,
     .hero-panel,
+    .info-card,
     .filter-section,
     .analytics-section,
+    .testing-section,
     .state-section,
     .table-section,
     .opportunity-card {

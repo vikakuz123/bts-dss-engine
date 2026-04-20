@@ -177,6 +177,27 @@ def build_dashboard_view_model(filters: dict[str, str]) -> dict[str, object]:
     }
 
 
+def build_interface_feature_overview() -> list[dict[str, str]]:
+    return [
+        {
+            "title": "Opportunity Monitoring",
+            "description": "View deal cards, current stages, priority levels, values, comments, and next-step planning in one workspace.",
+        },
+        {
+            "title": "Sales Funnel Analytics",
+            "description": "Track stage counts, conversion from the initial volume, conversion from the previous stage, and overall success rate.",
+        },
+        {
+            "title": "Loss Analysis",
+            "description": "Break down failed deals by stage and weighted failure reasons to understand where and why the funnel loses deals.",
+        },
+        {
+            "title": "Testing Workflow",
+            "description": "Refresh Bitrix data, recalculate analytics, submit feedback, and verify interface behavior directly from the dashboard.",
+        },
+    ]
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {
@@ -202,6 +223,10 @@ def dashboard(request: Request):
             "app_name": settings.app_name,
             "app_env": settings.app_env,
             "view": build_dashboard_view_model(filters),
+            "feature_overview": build_interface_feature_overview(),
+            "testing_access_url": str(request.url_for("dashboard")),
+            "health_url": str(request.url_for("health")),
+            "analytics_url": str(request.url_for("get_analytics_summary")),
         },
     )
 

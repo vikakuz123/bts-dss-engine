@@ -40,6 +40,68 @@
             </div>
         </section>
 
+        <section class="info-grid">
+            <article class="info-card">
+                <div class="section-heading compact-heading">
+                    <h2>Testing Access</h2>
+                    <p>Interface published through a dedicated server port for testing.</p>
+                </div>
+                <div class="info-stack">
+                    <div class="info-line">
+                        <span class="info-label-inline">Dashboard</span>
+                        <a class="inline-link" href="{{ testing_access_url }}">{{ testing_access_url }}</a>
+                    </div>
+                    <div class="info-line">
+                        <span class="info-label-inline">Health</span>
+                        <a class="inline-link" href="{{ health_url }}">{{ health_url }}</a>
+                    </div>
+                    <div class="info-line">
+                        <span class="info-label-inline">Analytics</span>
+                        <a class="inline-link" href="{{ analytics_url }}">{{ analytics_url }}</a>
+                    </div>
+                </div>
+            </article>
+            <article class="info-card">
+                <div class="section-heading compact-heading">
+                    <h2>Interface Functions</h2>
+                    <p>Short overview for participants before testing.</p>
+                </div>
+                <div class="feature-list">
+                    {% for feature in feature_overview %}
+                    <div class="feature-item">
+                        <strong>{{ feature.title }}</strong>
+                        <p>{{ feature.description }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <section class="testing-section">
+            <div class="section-heading">
+                <h2>Testing Tasks</h2>
+                <p>Practical checklist for the current testing round.</p>
+            </div>
+            <div class="testing-grid">
+                <article class="testing-card">
+                    <strong>1. Open the published interface</strong>
+                    <p>Use the dashboard URL above and confirm that the page opens through the server port without errors.</p>
+                </article>
+                <article class="testing-card">
+                    <strong>2. Review interface functions</strong>
+                    <p>Check opportunity cards, funnel analytics, weighted loss breakdown, search, filters, and quick actions.</p>
+                </article>
+                <article class="testing-card">
+                    <strong>3. Continue practical refinement</strong>
+                    <p>Update next steps, run the Bitrix pipeline, and verify that metrics and cards refresh consistently.</p>
+                </article>
+                <article class="testing-card">
+                    <strong>4. Record and fix defects</strong>
+                    <p>Repeat UI testing, verify analytics endpoints, and eliminate any issues found during the test cycle.</p>
+                </article>
+            </div>
+        </section>
+
         <section class="metric-grid">
             <article class="metric-card accent-amber">
                 <span class="metric-value">{{ view.metrics.raw_deals }}</span>
