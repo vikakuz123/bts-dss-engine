@@ -16,6 +16,9 @@ class Settings:
     qdrant_url: str
     qdrant_api_key: str | None
     qdrant_collection: str
+    neo4j_uri: str
+    neo4j_user: str
+    neo4j_password: str
 
 
 def _validate_qdrant_url(qdrant_url: str) -> None:
@@ -55,4 +58,7 @@ def load_settings() -> Settings:
         qdrant_url=qdrant_url,
         qdrant_api_key=os.getenv("QDRANT_API_KEY", "").strip() or None,
         qdrant_collection=os.getenv("QDRANT_COLLECTION", "bitrix_crm_v2").strip(),
+        neo4j_uri=os.getenv("NEO4J_URI", "bolt://localhost:7687").strip(),
+        neo4j_user=os.getenv("NEO4J_USER", "neo4j").strip(),
+        neo4j_password=os.getenv("NEO4J_PASSWORD", "").strip(),
     )

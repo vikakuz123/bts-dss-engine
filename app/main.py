@@ -30,8 +30,25 @@ from app.db import (
     update_opportunity_next_step,
     upsert_raw_bitrix_deals,
 )
+from app.dss_services import (
+    build_decision_recommendations,
+    build_opportunity_units,
+    compute_opportunity_unit_scores,
+    compute_opportunity_unit_states,
+    create_entity_resolution,
+    create_recommendation_feedback,
+    extract_entities_from_text,
+    extract_event_entities,
+    get_object_graph,
+    get_opportunity_decision,
+    get_opportunity_state,
+    get_role_dashboard,
+    ingest_bitrix_event,
+    run_decision_pipeline,
+    seed_action_templates,
+    vector_collection_contracts,
+)
 from app.qdrant_service import build_qdrant_client
-from sync_bitrix_to_qdrant import fetch_bitrix_entities
 
 settings = load_settings()
 app = FastAPI(title=settings.app_name)
@@ -51,6 +68,41 @@ class FeedbackCreateRequest(BaseModel):
 
 class OpportunityNextStepUpdateRequest(BaseModel):
     next_step: str
+
+
+class BitrixEventRequest(BaseModel):
+    event_id: str = ""
+    entity_type: str = "deal"
+    entity_id: str = ""
+    event_type: str = "timeline"
+    channel: str = "bitrix24"
+    occurred_at: str = ""
+    text: str = ""
+    transcript_ref: str = ""
+    payload: dict = {}
+
+
+class NlpExtractRequest(BaseModel):
+    text: str
+
+
+class EntityNormalizeRequest(BaseModel):
+    entity_type: str
+    raw_value: str
+
+
+class RecommendationFeedbackRequest(BaseModel):
+    shown_to_user_id: str = ""
+    shown_to_role: str = ""
+    was_shown: bool = True
+    decision: str = ""
+    rejection_reason: str = ""
+    was_executed: bool = False
+    deal_outcome: str = ""
+    effect_1d: str = ""
+    effect_3d: str = ""
+    effect_7d: str = ""
+    effect_30d: str = ""
 
 
 @app.on_event("startup")
@@ -305,6 +357,8 @@ def get_raw_deals(limit: int = 20) -> dict[str, object]:
 
 @app.post("/ingest/bitrix/deals")
 def ingest_bitrix_deals() -> dict[str, object]:
+    from sync_bitrix_to_qdrant import fetch_bitrix_entities
+
     deal_fields = [
         "*",
         "UF_*",
@@ -476,6 +530,7 @@ def run_dashboard_pipeline() -> RedirectResponse:
     compute_opportunity_priority()
     build_actions()
     build_explainability()
+    run_decision_pipeline(engine)
 
     redirect = RedirectResponse(
         url=f"/dashboard?ingested={result['fetched']}",
@@ -536,3 +591,132 @@ async def dashboard_update_action_status(
     if item is None:
         raise HTTPException(status_code=404, detail="Action not found")
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.post("/events/bitrix")
+def post_bitrix_event(payload: BitrixEventRequest) -> dict[str, object]:
+    raw_payload = dict(payload.payload or {})
+    raw_payload.update(
+        {
+            "event_id": payload.event_id,
+            "entity_type": payload.entity_type,
+            "entity_id": payload.entity_id,
+            "event_type": payload.event_type,
+            "channel": payload.channel,
+            "occurred_at": payload.occurred_at,
+            "text": payload.text,
+            "transcript_ref": payload.transcript_ref,
+        }
+    )
+    item = ingest_bitrix_event(engine, raw_payload)
+    return {"status": "ok", "item": item}
+
+
+@app.post("/nlp/extract")
+def post_nlp_extract(payload: NlpExtractRequest) -> dict[str, object]:
+    return {"status": "ok", "item": extract_entities_from_text(payload.text)}
+
+
+@app.post("/nlp/extract/events/{event_id}")
+def post_nlp_extract_event(event_id: int) -> dict[str, object]:
+    item = extract_event_entities(engine, event_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Communication event not found")
+    return {"status": "ok", "item": item}
+
+
+@app.post("/normalization/resolve")
+def post_normalization_resolve(payload: EntityNormalizeRequest) -> dict[str, object]:
+    item = create_entity_resolution(engine, payload.entity_type, payload.raw_value)
+    return {"status": "ok", "item": item}
+
+
+@app.post("/vectors/index")
+def post_vectors_index() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "message": "Qdrant collection contract for MVP. Actual indexing is handled by vector_index_service.",
+        "collections": vector_collection_contracts(),
+    }
+
+
+@app.post("/build/opportunity-units")
+def post_build_opportunity_units() -> dict[str, object]:
+    return {"status": "ok", **build_opportunity_units(engine)}
+
+
+@app.post("/compute/opportunity-unit-scores")
+def post_compute_opportunity_unit_scores() -> dict[str, object]:
+    return {"status": "ok", **compute_opportunity_unit_scores(engine)}
+
+
+@app.post("/compute/opportunity-unit-states")
+def post_compute_opportunity_unit_states() -> dict[str, object]:
+    return {"status": "ok", **compute_opportunity_unit_states(engine)}
+
+
+@app.post("/build/decision-recommendations")
+def post_build_decision_recommendations() -> dict[str, object]:
+    return {"status": "ok", **build_decision_recommendations(engine)}
+
+
+@app.post("/setup/action-templates")
+def post_setup_action_templates() -> dict[str, object]:
+    return {"status": "ok", **seed_action_templates(engine)}
+
+
+@app.post("/pipeline/dss")
+def post_run_dss_pipeline() -> dict[str, object]:
+    return {"status": "ok", "item": run_decision_pipeline(engine)}
+
+
+@app.get("/opportunities/{opportunity_unit_id}/state")
+def get_s3_state(opportunity_unit_id: int) -> dict[str, object]:
+    item = get_opportunity_state(engine, opportunity_unit_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Opportunity Unit not found")
+    return {"status": "ok", "item": item}
+
+
+@app.get("/opportunities/{opportunity_unit_id}/decision")
+def get_s2_s1_decision(opportunity_unit_id: int) -> dict[str, object]:
+    item = get_opportunity_decision(engine, opportunity_unit_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Opportunity Unit not found")
+    return {"status": "ok", "item": item}
+
+
+@app.get("/objects/{object_id}/graph")
+def get_project_object_graph(object_id: str) -> dict[str, object]:
+    return {"status": "ok", "item": get_object_graph(engine, object_id)}
+
+
+@app.get("/dashboard/manager")
+def get_manager_dashboard() -> dict[str, object]:
+    return {"status": "ok", "item": get_role_dashboard(engine, "manager")}
+
+
+@app.get("/dashboard/rop")
+def get_rop_dashboard() -> dict[str, object]:
+    return {"status": "ok", "item": get_role_dashboard(engine, "rop")}
+
+
+@app.get("/dashboard/logistics")
+def get_logistics_dashboard() -> dict[str, object]:
+    return {"status": "ok", "item": get_role_dashboard(engine, "logistics")}
+
+
+@app.get("/dashboard/owner")
+def get_owner_dashboard() -> dict[str, object]:
+    return {"status": "ok", "item": get_role_dashboard(engine, "owner")}
+
+
+@app.post("/actions/{recommendation_id}/feedback")
+def post_recommendation_feedback(
+    recommendation_id: int,
+    payload: RecommendationFeedbackRequest,
+) -> dict[str, object]:
+    item = create_recommendation_feedback(engine, recommendation_id, payload.model_dump())
+    if item is None:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+    return {"status": "ok", "item": item}

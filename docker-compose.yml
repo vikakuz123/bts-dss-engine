@@ -10,6 +10,8 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+      neo4j:
+        condition: service_started
     ports:
       - "8000:8000"
 
@@ -36,6 +38,19 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+  neo4j:
+    image: neo4j:5-community
+    container_name: bts-dss-neo4j
+    restart: unless-stopped
+    environment:
+      NEO4J_AUTH: neo4j/bts_neo4j_change_me
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j_data:/data
+
 volumes:
   postgres_data:
   qdrant_data:
+  neo4j_data:
