@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import math
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +25,7 @@ VECTOR_COLLECTIONS = (
     "contact_person_vectors",
     "object_history_vectors",
 )
+VECTOR_SIZE = 384
 
 
 @dataclass(frozen=True)
@@ -242,13 +246,28 @@ def _count_collection(client: QdrantClient, collection_name: str) -> int:
     return int(result.count)
 
 
-def index_dss_vectors(engine: Engine, settings: Settings) -> dict[str, Any]:
-    from fastembed import TextEmbedding
+def _embed_document(document: str, vector_size: int = VECTOR_SIZE) -> list[float]:
+    vector = [0.0] * vector_size
+    tokens = re.findall(r"[\wА-Яа-яЁё]+", document.lower())
+    for token in tokens:
+        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+        bucket = int.from_bytes(digest[:4], "big") % vector_size
+        sign = 1.0 if digest[4] % 2 == 0 else -1.0
+        vector[bucket] += sign
 
+    norm = math.sqrt(sum(value * value for value in vector))
+    if norm == 0:
+        return vector
+    return [round(value / norm, 6) for value in vector]
+
+
+def _embed_documents(documents: list[str]) -> list[list[float]]:
+    return [_embed_document(document) for document in documents]
+
+
+def index_dss_vectors(engine: Engine, settings: Settings) -> dict[str, Any]:
     client = build_qdrant_client(settings)
-    embedding_model = TextEmbedding(model_name=settings.embedding_model)
-    probe_vector = next(embedding_model.embed(["bts dss vector index probe"])).tolist()
-    vector_size = len(probe_vector)
+    vector_size = VECTOR_SIZE
 
     for collection_name in VECTOR_COLLECTIONS:
         _ensure_collection(client, collection_name, vector_size)
@@ -263,7 +282,7 @@ def index_dss_vectors(engine: Engine, settings: Settings) -> dict[str, Any]:
         indexed[collection_name] = 0
         for start in range(0, len(collection_documents), 50):
             batch = collection_documents[start : start + 50]
-            vectors = [vector.tolist() for vector in embedding_model.embed([item.document for item in batch])]
+            vectors = _embed_documents([item.document for item in batch])
             points = [
                 models.PointStruct(
                     id=_point_id(item.collection, item.source_type, item.source_id),
@@ -277,7 +296,7 @@ def index_dss_vectors(engine: Engine, settings: Settings) -> dict[str, Any]:
                 indexed[collection_name] += len(points)
 
     return {
-        "embedding_model": settings.embedding_model,
+        "embedding_model": "local_hash_v1",
         "vector_size": vector_size,
         "indexed": indexed,
         "collection_counts": {
