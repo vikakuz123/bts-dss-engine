@@ -48,7 +48,7 @@ from app.dss_services import (
     seed_action_templates,
     vector_collection_contracts,
 )
-from app.qdrant_service import build_qdrant_client
+from app.qdrant_service import build_qdrant_client, index_dss_vectors
 
 settings = load_settings()
 app = FastAPI(title=settings.app_name)
@@ -633,10 +633,23 @@ def post_normalization_resolve(payload: EntityNormalizeRequest) -> dict[str, obj
 
 @app.post("/vectors/index")
 def post_vectors_index() -> dict[str, object]:
+    try:
+        result = index_dss_vectors(engine, settings)
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Vector indexing dependency is missing: {exc.name}",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Vector indexing failed: {exc}",
+        ) from exc
     return {
         "status": "ok",
-        "message": "Qdrant collection contract for MVP. Actual indexing is handled by vector_index_service.",
+        "message": "Qdrant MVP collections indexed from PostgreSQL DSS data.",
         "collections": vector_collection_contracts(),
+        "indexing": result,
     }
 
 
