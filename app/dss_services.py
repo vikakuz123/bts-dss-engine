@@ -139,6 +139,82 @@ PROMISE_MARKERS = (
 )
 
 
+EQUIPMENT_ALIASES = {
+    "excavator_loader": (
+        "экскаватор-погрузчик",
+        "экскаватор погрузчик",
+        "jcb",
+        "jcb 3cx",
+        "3cx",
+    ),
+    "truck_crane": ("автокран", "кран", "truck crane"),
+    "manipulator": ("манипулятор", "кму"),
+    "loader": ("погрузчик", "фронтальный погрузчик"),
+    "aerial_platform": ("автовышка", "вышка", "агп"),
+    "telehandler": ("телескопический погрузчик", "manitou", "маниту"),
+    "excavator": ("экскаватор", "гусеничный экскаватор", "колесный экскаватор"),
+}
+
+ENTITY_STOP_WORDS = (
+    "срочно",
+    "завтра",
+    "сегодня",
+    "послезавтра",
+    "нужен",
+    "нужна",
+    "нужно",
+    "требуется",
+    "просит",
+    "ждет",
+)
+
+
+def _repair_text(value: object) -> str:
+    text = _as_text(value)
+    candidates = [text]
+    for encoding in ("cp1251", "latin1"):
+        try:
+            candidates.append(text.encode(encoding).decode("utf-8"))
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+    repaired = min(candidates, key=lambda item: item.count("Р") + item.count("С") + item.count("�"))
+    return repaired.replace("ё", "е").replace("Ё", "Е")
+
+
+def _canon_text(value: object) -> str:
+    return _repair_text(value).lower()
+
+
+def _clean_extracted_value(value: object) -> str:
+    text = _repair_text(value)
+    text = re.split(
+        r"\b(?:нужен|нужна|нужно|требуется|срочно|завтра|сегодня|контакт|лпр|адрес)\b",
+        text,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    text = re.sub(r"[\"'`]+", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" .,:;()[]")
+    return text[:120]
+
+
+def _first_match(patterns: tuple[str, ...], text: str, flags: int = re.IGNORECASE) -> str:
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=flags)
+        if match:
+            value = next((group for group in match.groups() if group), "")
+            return _clean_extracted_value(value)
+    return ""
+
+
+def _normalize_equipment_type(value: object) -> str:
+    lower = _canon_text(value)
+    for normalized, aliases in EQUIPMENT_ALIASES.items():
+        if any(alias in lower for alias in aliases):
+            return normalized
+    return _normalize_name(value)
+
+
 def _normalize_name(value: object) -> str:
     text = _as_text(value).lower()
     text = text.replace("ё", "е")
@@ -157,6 +233,28 @@ def _score_from_markers(text: str, markers: tuple[str, ...], base: float = 20.0)
     if not text:
         return 0.0
     hits = sum(1 for marker in markers if marker in text.lower().replace("ё", "е"))
+    return min(100.0, base + hits * 22.0)
+
+
+def _normalize_name(value: object) -> str:
+    text = _canon_text(value)
+    text = re.sub(r"[\"'`.,;:()]+", " ", text)
+    text = re.sub(r"\b(ооо|оао|ао|пао|ип|зао|llc|ltd|inc)\b", " ", text)
+    text = re.sub(r"\b(?:%s)\b" % "|".join(ENTITY_STOP_WORDS), " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _contains_marker(text: str, markers: tuple[str, ...]) -> bool:
+    lower = _canon_text(text)
+    return any(_canon_text(marker) in lower for marker in markers)
+
+
+def _score_from_markers(text: str, markers: tuple[str, ...], base: float = 20.0) -> float:
+    if not text:
+        return 0.0
+    lower = _canon_text(text)
+    hits = sum(1 for marker in markers if _canon_text(marker) in lower)
     return min(100.0, base + hits * 22.0)
 
 
@@ -408,6 +506,130 @@ def extract_entities_from_text(text: str) -> dict[str, Any]:
     return {"extracted": extracted, "confidence_score": round(confidence, 2), "extractor_version": "rules_v1"}
 
 
+def extract_entities_from_text(text: str) -> dict[str, Any]:
+    clean = _repair_text(text)
+    lower = _canon_text(clean)
+
+    company = _first_match(
+        (
+            r"(?:компания|клиент|заказчик)\s+([A-ZА-ЯЁ0-9\"' .\-]{3,80})",
+            r"\b((?:ООО|АО|ПАО|ИП|ЗАО)\s+[A-ZА-ЯЁ0-9\"' .\-]{2,80})",
+            r"(?:company|client|customer)\s+([A-ZA-Z0-9\"' .\-]{3,80})",
+        ),
+        clean,
+    )
+    contact = _first_match(
+        (
+            r"(?:контакт|лпр|прораб|инженер|менеджер)\s+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё\-]+(?:\s+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё\-]+){0,2})",
+            r"(?:звонить|связаться)\s+([A-ZА-ЯЁ][A-Za-zА-Яа-яЁё\-]+(?:\s+[A-ZА-ЯЁ][A-Za-zА-Яа-яЁё\-]+){0,2})",
+        ),
+        clean,
+    )
+    project_object = _first_match(
+        (
+            r"(?:объект|стройка|площадка|жк|бц)\s+([^.;\n]{3,90})",
+            r"(?:на объекте)\s+([^.;\n]{3,90})",
+        ),
+        clean,
+    )
+    address = _first_match(
+        (
+            r"(?:адрес|по адресу|ул\.?|улица|шоссе|проспект|район)\s+([^.;\n]{3,100})",
+            r"\b((?:ул\.?|улица|шоссе|проспект|пр-т|район)\s+[^.;\n]{3,100})",
+        ),
+        clean,
+    )
+
+    equipment_type = ""
+    for normalized, aliases in EQUIPMENT_ALIASES.items():
+        if any(alias in lower for alias in aliases):
+            equipment_type = normalized
+            break
+
+    model_match = re.search(
+        r"\b(jcb\s*3cx|jcb|manitou|маниту|liebherr|xcmg|zoomlion|като|клинцы|ивановец|камаз)\b",
+        lower,
+    )
+    window_match = re.search(
+        r"\b(сегодня|завтра|послезавтра|с понедельника|с утра|к утру|на неделю|на месяц|\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?)\b",
+        lower,
+    )
+    duration_match = re.search(
+        r"\b(\d+\s*(?:дн|день|дня|дней|смен|смены|час|часа|часов|недел[яюи]|месяц|месяца|мес))\b",
+        lower,
+    )
+    tech_params = sorted(
+        set(
+            re.findall(
+                r"\b\d+(?:[,.]\d+)?\s*(?:тонн|т|м|метр|метра|метров|м3|куб|смен|час|часа|часов)\b",
+                lower,
+            )
+        )
+    )
+    work_conditions = _first_match(
+        (
+            r"(?:условия|работа|грунт|плечо|высота|стрела|вылет)\s+([^.;\n]{3,90})",
+        ),
+        clean,
+    )
+    next_step = _first_match(
+        (
+            r"(?:следующий шаг|клиент просит|ждет|ожидает)\s+([^.;\n]{3,90})",
+            r"(?:нужно|надо)\s+(позвонить|отправить кп|выставить счет|подготовить договор|уточнить[^.;\n]{0,70})",
+        ),
+        clean,
+    )
+    next_touch = _first_match(
+        (
+            r"(?:следующее касание|перезвонить|созвон)\s+([^.;\n]{3,60})",
+        ),
+        clean,
+    )
+
+    own_signal = "unknown"
+    if _contains_marker(clean, SUBRENT_MARKERS) or any(word in lower for word in ("субаренда", "партнер", "нет своей")):
+        own_signal = "subrent"
+    elif _contains_marker(clean, OWN_EQUIPMENT_MARKERS) or any(word in lower for word in ("своя техника", "есть в парке", "наш парк")):
+        own_signal = "own_equipment"
+
+    risk_reasons = [
+        reason
+        for reason, has_signal in {
+            "debt_risk": _contains_marker(clean, DEBT_MARKERS) or any(word in lower for word in ("дебитор", "долг", "просроч", "черный список")),
+            "negative_margin_risk": _contains_marker(clean, NEGATIVE_MARGIN_MARKERS) or any(word in lower for word in ("ниже марж", "минус", "убыт", "дорогая субаренда")),
+            "unclear_specs": not equipment_type and any(word in lower for word in ("техника", "машина", "нужно")),
+        }.items()
+        if has_signal
+    ]
+
+    extracted = {
+        "client_company": company,
+        "contact_person": contact,
+        "project_object": project_object,
+        "address_or_geo": address,
+        "equipment_type": equipment_type,
+        "equipment_model": model_match.group(1).upper() if model_match else "",
+        "time_window": window_match.group(1) if window_match else "",
+        "urgency": "high" if (_contains_marker(clean, URGENCY_MARKERS) or any(word in lower for word in ("срочно", "горит", "сегодня", "завтра"))) else "unknown",
+        "rental_duration": duration_match.group(1) if duration_match else "",
+        "work_conditions": work_conditions,
+        "technical_parameters": tech_params or [marker for marker in SPEC_MARKERS if _canon_text(marker) in lower],
+        "price_context": "mentioned" if any(word in lower for word in ("цена", "ставка", "руб", "₽", "дорого", "дешевле", "счет", "price", "rate")) else "",
+        "competitor_mention": _contains_marker(clean, COMPETITOR_MARKERS) or any(word in lower for word in ("конкурент", "другие дали", "дешевле")),
+        "own_or_subrent_signal": own_signal,
+        "contract_readiness": any(word in lower for word in ("договор", "подписать", "готовы подписать")),
+        "payment_readiness": any(word in lower for word in ("оплата", "счет", "предоплата", "готовы оплатить")),
+        "risk_reasons": risk_reasons,
+        "next_client_step": next_step or ("ждет КП" if "кп" in lower else ""),
+        "manager_promise": "mentioned" if (_contains_marker(clean, PROMISE_MARKERS) or any(word in lower for word in ("обещал", "должен был", "просрочил"))) else "",
+        "next_touch_date": next_touch or (window_match.group(1) if window_match else ""),
+    }
+    scalar_signals = sum(bool(value) for value in extracted.values() if not isinstance(value, list))
+    list_signals = sum(1 for value in extracted.values() if isinstance(value, list) and value)
+    confidence = min(0.96, 0.2 + scalar_signals * 0.055 + list_signals * 0.04)
+    return {"extracted": extracted, "confidence_score": round(confidence, 2), "extractor_version": "rules_v2"}
+
+
 def extract_event_entities(engine: Engine, event_id: int) -> dict[str, Any] | None:
     with Session(engine) as session:
         event = session.query(CommunicationEvent).filter_by(id=event_id).one_or_none()
@@ -457,6 +679,50 @@ def create_entity_resolution(engine: Engine, entity_type: str, raw_value: str) -
         }
 
 
+def create_entity_resolution(engine: Engine, entity_type: str, raw_value: str) -> dict[str, Any]:
+    normalized = _normalize_equipment_type(raw_value) if entity_type == "equipment_type" else _normalize_name(raw_value)
+    if entity_type in {"company", "client_company"}:
+        normalized = re.sub(r"\b(строительная|компания|клиент|заказчик)\b", " ", normalized)
+    elif entity_type in {"project_object", "object"}:
+        normalized = re.sub(r"\b(объект|стройка|площадка)\b", " ", normalized)
+    elif entity_type == "competitor":
+        normalized = re.sub(r"\b(конкурент|дал|дали|предложил|предложили)\b", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    confidence = 0.35
+    if normalized:
+        confidence = 0.72
+        if len(normalized) >= 4:
+            confidence += 0.12
+        if entity_type == "equipment_type" and normalized in EQUIPMENT_ALIASES:
+            confidence += 0.1
+        if raw_value != normalized:
+            confidence += 0.04
+    confidence = min(0.96, confidence)
+    resolved_entity_id = f"{entity_type}:{normalized}" if normalized else ""
+
+    with Session(engine) as session:
+        record = EntityResolutionRecord(
+            entity_type=entity_type,
+            raw_value=_repair_text(raw_value),
+            normalized_value=normalized,
+            confidence_score=confidence,
+            resolved_entity_id=resolved_entity_id,
+            resolution_reason="MVP normalization v2: text repair, legal-form cleanup, type-specific aliases.",
+        )
+        session.add(record)
+        session.commit()
+        session.refresh(record)
+        return {
+            "id": record.id,
+            "entity_type": record.entity_type,
+            "raw_value": record.raw_value,
+            "normalized_value": record.normalized_value,
+            "confidence_score": record.confidence_score,
+            "resolved_entity_id": record.resolved_entity_id,
+        }
+
+
 def build_opportunity_units(engine: Engine) -> dict[str, int]:
     inserted = 0
     updated = 0
@@ -473,20 +739,20 @@ def build_opportunity_units(engine: Engine) -> dict[str, int]:
             risk_level = "debt_block" if "debt_risk" in risk_reasons else "unknown"
             margin_estimate = -1.0 if "negative_margin_risk" in risk_reasons else 0.0
             required_present = {
-                "client_name": bool(opportunity.company_id),
+                "client_name": bool(opportunity.company_id or extracted.get("client_company")),
                 "object_name": bool(extracted.get("project_object")),
                 "equipment_type": bool(extracted.get("equipment_type")),
                 "need_window": bool(extracted.get("time_window")),
                 "rental_duration": bool(extracted.get("rental_duration")),
-                "next_step": bool(opportunity.next_step),
+                "next_step": bool(opportunity.next_step or extracted.get("next_client_step")),
                 "owner_manager_id": bool((opportunity.raw_context if hasattr(opportunity, "raw_context") else "") or ""),
             }
             data_quality_score = round((sum(required_present.values()) / len(required_present)) * 100, 1)
             payload = {
-                "client_name": opportunity.company_id,
-                "client_entity_id": f"company:{opportunity.company_id}" if opportunity.company_id else "",
-                "contact_name": opportunity.contact_id,
-                "contact_entity_id": f"person:{opportunity.contact_id}" if opportunity.contact_id else "",
+                "client_name": opportunity.company_id or extracted.get("client_company") or "",
+                "client_entity_id": f"company:{_normalize_name(opportunity.company_id or extracted.get('client_company'))}" if (opportunity.company_id or extracted.get("client_company")) else "",
+                "contact_name": opportunity.contact_id or extracted.get("contact_person") or "",
+                "contact_entity_id": f"person:{_normalize_name(opportunity.contact_id or extracted.get('contact_person'))}" if (opportunity.contact_id or extracted.get("contact_person")) else "",
                 "object_name": extracted.get("project_object") or "",
                 "object_entity_id": f"object:{_normalize_name(extracted.get('project_object'))}" if extracted.get("project_object") else "",
                 "object_address": extracted.get("address_or_geo") or "",
@@ -495,11 +761,11 @@ def build_opportunity_units(engine: Engine) -> dict[str, int]:
                 "need_window": extracted.get("time_window") or "",
                 "rental_duration": extracted.get("rental_duration") or "",
                 "commercial_scenario": commercial_scenario,
-                "decision_access_status": "contact_known" if opportunity.contact_id else "unknown",
+                "decision_access_status": "contact_known" if (opportunity.contact_id or extracted.get("contact_person")) else "unknown",
                 "risk_level": risk_level,
                 "economic_value": _parse_amount(opportunity.opportunity_value),
                 "margin_estimate": margin_estimate,
-                "next_step": opportunity.next_step,
+                "next_step": opportunity.next_step or extracted.get("next_client_step") or "",
                 "owner_manager_id": "",
                 "data_quality_score": data_quality_score,
                 "raw_context": {"source_opportunity_id": opportunity.id, "source_text": context_text, "extracted": extracted},
