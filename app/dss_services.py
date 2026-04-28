@@ -80,6 +80,64 @@ COMPETITOR_MARKERS = (
     "предложили",
 )
 
+DEBT_MARKERS = (
+    "debt",
+    "overdue",
+    "blacklist",
+    "дебиторк",
+    "долг",
+    "просроч",
+    "РґРµР±РёС‚РѕСЂРє",
+    "РґРѕР»Рі",
+    "РїСЂРѕСЃСЂРѕС‡",
+)
+
+NEGATIVE_MARGIN_MARKERS = (
+    "negative margin",
+    "below margin",
+    "ниже марж",
+    "минус",
+    "дорогая субаренда",
+    "РЅРёР¶Рµ РјР°СЂР¶",
+    "РјРёРЅСѓСЃ",
+    "РґРѕСЂРѕРіР°СЏ СЃСѓР±Р°СЂРµРЅРґР°",
+)
+
+OWN_EQUIPMENT_MARKERS = (
+    "own equipment",
+    "available fleet",
+    "своя техник",
+    "наша техник",
+    "есть в парке",
+    "СЃРІРѕСЏ С‚РµС…РЅРёРє",
+    "РЅР°С€Р° С‚РµС…РЅРёРє",
+    "РµСЃС‚СЊ РІ РїР°СЂРєРµ",
+)
+
+CROSS_SELL_MARKERS = (
+    "cross sell",
+    "additional equipment",
+    "дополнительн",
+    "соседн",
+    "кросс",
+    "РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅ",
+    "СЃРѕСЃРµРґРЅ",
+    "РєСЂРѕСЃСЃ",
+)
+
+PROMISE_MARKERS = (
+    "promise",
+    "overdue follow",
+    "обещал",
+    "обещание",
+    "должен был",
+    "просрочен",
+    "РѕР±РµС‰Р°Р»",
+    "РѕР±РµС‰Р°РЅРёРµ",
+    "РґРѕР»Р¶РµРЅ Р±С‹Р»",
+    "РїСЂРѕСЃСЂРѕС‡РµРЅ",
+)
+
 
 def _normalize_name(value: object) -> str:
     text = _as_text(value).lower()
@@ -100,6 +158,29 @@ def _score_from_markers(text: str, markers: tuple[str, ...], base: float = 20.0)
         return 0.0
     hits = sum(1 for marker in markers if marker in text.lower().replace("ё", "е"))
     return min(100.0, base + hits * 22.0)
+
+
+def _context_text(unit: OpportunityUnit) -> str:
+    raw_context = unit.raw_context or {}
+    extracted = raw_context.get("extracted") if isinstance(raw_context, dict) else {}
+    extracted_text = " ".join(str(value) for value in (extracted or {}).values())
+    return " ".join(
+        [
+            _as_text(raw_context.get("source_text") if isinstance(raw_context, dict) else ""),
+            extracted_text,
+            unit.client_name,
+            unit.contact_name,
+            unit.object_name,
+            unit.object_address,
+            unit.equipment_type,
+            unit.equipment_model,
+            unit.need_window,
+            unit.rental_duration,
+            unit.commercial_scenario,
+            unit.risk_level,
+            unit.next_step,
+        ]
+    )
 
 
 def _deadline(minutes: int) -> str:
@@ -310,9 +391,16 @@ def extract_entities_from_text(text: str) -> dict[str, Any]:
         "own_or_subrent_signal": "subrent" if _contains_marker(clean, SUBRENT_MARKERS) else "unknown",
         "contract_readiness": _contains_marker(clean, ("договор", "подписать")),
         "payment_readiness": _contains_marker(clean, ("оплата", "счет", "предоплата")),
-        "risk_reasons": [],
+        "risk_reasons": [
+            reason
+            for reason, has_signal in {
+                "debt_risk": _contains_marker(clean, DEBT_MARKERS),
+                "negative_margin_risk": _contains_marker(clean, NEGATIVE_MARGIN_MARKERS),
+            }.items()
+            if has_signal
+        ],
         "next_client_step": "ждет КП" if "кп" in lower else "",
-        "manager_promise": "",
+        "manager_promise": "mentioned" if _contains_marker(clean, PROMISE_MARKERS) else "",
         "next_touch_date": date_match.group(1) if date_match else "",
     }
     signal_count = sum(bool(value) for value in extracted.values() if not isinstance(value, list))
@@ -378,6 +466,12 @@ def build_opportunity_units(engine: Engine) -> dict[str, int]:
             existing = session.query(OpportunityUnit).filter_by(bitrix_deal_id=opportunity.source_deal_id).one_or_none()
             context_text = " ".join([opportunity.title or "", opportunity.last_comment or "", opportunity.next_step or ""])
             extracted = extract_entities_from_text(context_text)["extracted"]
+            risk_reasons = extracted.get("risk_reasons") or []
+            commercial_scenario = extracted.get("own_or_subrent_signal") or "unknown"
+            if commercial_scenario == "unknown" and _contains_marker(context_text, OWN_EQUIPMENT_MARKERS):
+                commercial_scenario = "own_equipment"
+            risk_level = "debt_block" if "debt_risk" in risk_reasons else "unknown"
+            margin_estimate = -1.0 if "negative_margin_risk" in risk_reasons else 0.0
             required_present = {
                 "client_name": bool(opportunity.company_id),
                 "object_name": bool(extracted.get("project_object")),
@@ -400,15 +494,15 @@ def build_opportunity_units(engine: Engine) -> dict[str, int]:
                 "equipment_model": extracted.get("equipment_model") or "",
                 "need_window": extracted.get("time_window") or "",
                 "rental_duration": extracted.get("rental_duration") or "",
-                "commercial_scenario": extracted.get("own_or_subrent_signal") or "unknown",
+                "commercial_scenario": commercial_scenario,
                 "decision_access_status": "contact_known" if opportunity.contact_id else "unknown",
-                "risk_level": "unknown",
+                "risk_level": risk_level,
                 "economic_value": _parse_amount(opportunity.opportunity_value),
-                "margin_estimate": 0.0,
+                "margin_estimate": margin_estimate,
                 "next_step": opportunity.next_step,
                 "owner_manager_id": "",
                 "data_quality_score": data_quality_score,
-                "raw_context": {"source_opportunity_id": opportunity.id, "extracted": extracted},
+                "raw_context": {"source_opportunity_id": opportunity.id, "source_text": context_text, "extracted": extracted},
             }
             if existing is None:
                 session.add(OpportunityUnit(bitrix_deal_id=opportunity.source_deal_id, **payload))
@@ -426,18 +520,18 @@ def compute_opportunity_unit_scores(engine: Engine) -> dict[str, int]:
     with Session(engine) as session:
         units = session.query(OpportunityUnit).order_by(OpportunityUnit.id.asc()).all()
         for unit in units:
-            text = " ".join([unit.raw_context.get("source_text", "") if unit.raw_context else "", unit.next_step, unit.equipment_type, unit.need_window])
+            text = _context_text(unit)
             need = 80.0 if unit.equipment_type or unit.object_name else 35.0
             time_score = 90.0 if unit.need_window in {"сегодня", "завтра"} else _score_from_markers(text, URGENCY_MARKERS, 25.0)
             spec = 85.0 if unit.equipment_type and (unit.equipment_model or unit.rental_duration) else 45.0 if unit.equipment_type else 20.0
             access = 70.0 if unit.contact_entity_id else 30.0
             money = 80.0 if unit.economic_value > 0 or _contains_marker(text, MATURITY_MARKERS) else 35.0
-            fit = 75.0 if unit.commercial_scenario != "subrent" and unit.equipment_type else 35.0
+            fit = 85.0 if unit.commercial_scenario == "own_equipment" else 45.0 if unit.commercial_scenario == "subrent" else 65.0 if unit.equipment_type else 35.0
             actionability = 85.0 if unit.next_step or unit.contact_entity_id else 45.0
             pclose = round((need + spec + access + money) / 400, 3)
             econ = min(100.0, max(10.0, unit.economic_value / 5000)) if unit.economic_value else 35.0
             urgency = time_score / 100
-            strategy_weight = 1.15 if fit >= 70 else 0.8
+            strategy_weight = 1.25 if unit.commercial_scenario == "own_equipment" else 0.9 if unit.commercial_scenario == "subrent" else 1.0
             priority = pclose * econ * urgency * (fit / 100) * (actionability / 100) * strategy_weight
             priority_score = round(min(100.0, priority), 1)
             blocked_reason = ""
@@ -447,6 +541,9 @@ def compute_opportunity_unit_scores(engine: Engine) -> dict[str, int]:
             if unit.margin_estimate < 0:
                 priority_score = min(priority_score, 30.0)
                 blocked_reason = "Отрицательная маржа."
+            if unit.commercial_scenario == "subrent" and priority_score >= 70:
+                priority_score = min(priority_score, 69.0)
+                blocked_reason = blocked_reason or "Нужна проверка субаренды и маржи."
             session.add(
                 OpportunityScore(
                     opportunity_unit_id=unit.id,
@@ -494,6 +591,15 @@ def compute_opportunity_unit_states(engine: Engine) -> dict[str, int]:
                 states.append(("hot_unprocessed" if score.need_score >= 70 else "missing_next_step", "Нет следующего шага", 0.86, "В Opportunity Unit не заполнен следующий шаг."))
             if score.blocked_reason:
                 states.append(("economic_or_debt_block", "Экономический или дебиторский блок", 0.92, score.blocked_reason))
+            text = _context_text(unit)
+            if unit.commercial_scenario == "subrent" and score.need_score >= 70:
+                states.append(("subrent_margin_review", "Subrent margin review", 0.82, "Subrent deal requires margin and partner availability check."))
+            if _contains_marker(text, COMPETITOR_MARKERS):
+                states.append(("competitor_on_object", "Competitor on object", 0.78, "Communication contains competitor signal."))
+            if _contains_marker(text, CROSS_SELL_MARKERS) and unit.object_entity_id:
+                states.append(("cross_sell_open", "Cross-sell opportunity", 0.72, "Object context suggests adjacent equipment demand."))
+            if _contains_marker(text, PROMISE_MARKERS) and not unit.next_step:
+                states.append(("manager_promise_overdue", "Manager promise overdue", 0.8, "There is a promise signal but no next step is recorded."))
             for code, name, confidence, reason in states:
                 session.add(
                     OpportunityState(
@@ -526,6 +632,10 @@ def build_decision_recommendations(engine: Engine) -> dict[str, int]:
             "unclear_technical_spec": "clarify_specs",
             "economic_or_debt_block": "owner_escalation",
             "missing_next_step": "follow_up_reminder",
+            "subrent_margin_review": "reprice_deal",
+            "competitor_on_object": "competitor_attack",
+            "cross_sell_open": "cross_sell_offer",
+            "manager_promise_overdue": "follow_up_reminder",
         }
         for unit in units:
             states = _active_states(session, unit.id)
@@ -546,6 +656,12 @@ def build_decision_recommendations(engine: Engine) -> dict[str, int]:
                     "similar_cases": [],
                     "recommended_action_reason": template.description,
                     "risk_if_ignored": "Сделка может потерять импульс, нарушить SLA или уйти к конкуренту.",
+                    "s0_alignment": {
+                        "own_equipment_priority": unit.commercial_scenario == "own_equipment",
+                        "margin_control": unit.margin_estimate >= 0,
+                        "debt_control": unit.risk_level != "debt_block",
+                        "noise_reduction": state.state_code != "noisy_low_priority",
+                    },
                 }
                 if existing is None:
                     session.add(
@@ -556,7 +672,7 @@ def build_decision_recommendations(engine: Engine) -> dict[str, int]:
                             target_role=template.target_role,
                             owner_id=unit.owner_manager_id,
                             deadline_at=_deadline(template.deadline_sla_minutes),
-                            requires_escalation=template.requires_approval or state.state_code in {"hot_unprocessed", "economic_or_debt_block"},
+                            requires_escalation=template.requires_approval or state.state_code in {"hot_unprocessed", "economic_or_debt_block", "subrent_margin_review", "competitor_on_object", "manager_promise_overdue"},
                             escalation_role="rop" if template.target_role != "owner" else "owner",
                             status="open",
                             explainability_json=explainability,
