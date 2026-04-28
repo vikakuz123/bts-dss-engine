@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from fastapi import BackgroundTasks
 from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi import Request
@@ -55,6 +58,13 @@ app = FastAPI(title=settings.app_name)
 engine = build_engine(settings)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+vector_index_status: dict[str, object] = {
+    "state": "idle",
+    "started_at": "",
+    "finished_at": "",
+    "last_result": None,
+    "last_error": "",
+}
 
 
 class FeedbackCreateRequest(BaseModel):
@@ -282,6 +292,42 @@ def build_ui_label_maps() -> dict[str, dict[str, str]]:
             "unknown": "неизвестно",
         },
     }
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _run_vector_index_job() -> None:
+    vector_index_status.update(
+        {
+            "state": "running",
+            "started_at": _utc_now(),
+            "finished_at": "",
+            "last_result": None,
+            "last_error": "",
+        }
+    )
+    try:
+        result = index_dss_vectors(engine, settings)
+    except Exception as exc:
+        vector_index_status.update(
+            {
+                "state": "failed",
+                "finished_at": _utc_now(),
+                "last_error": str(exc),
+            }
+        )
+        return
+
+    vector_index_status.update(
+        {
+            "state": "completed",
+            "finished_at": _utc_now(),
+            "last_result": result,
+            "last_error": "",
+        }
+    )
 
 
 @app.get("/")
@@ -632,24 +678,23 @@ def post_normalization_resolve(payload: EntityNormalizeRequest) -> dict[str, obj
 
 
 @app.post("/vectors/index")
-def post_vectors_index() -> dict[str, object]:
-    try:
-        result = index_dss_vectors(engine, settings)
-    except ModuleNotFoundError as exc:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Vector indexing dependency is missing: {exc.name}",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Vector indexing failed: {exc}",
-        ) from exc
+def post_vectors_index(background_tasks: BackgroundTasks) -> dict[str, object]:
+    if vector_index_status["state"] != "running":
+        background_tasks.add_task(_run_vector_index_job)
     return {
         "status": "ok",
-        "message": "Qdrant MVP collections indexed from PostgreSQL DSS data.",
+        "message": "Qdrant MVP indexing is queued. Check indexing.state and call again for the latest status.",
         "collections": vector_collection_contracts(),
-        "indexing": result,
+        "indexing": vector_index_status,
+    }
+
+
+@app.get("/vectors/index/status")
+def get_vectors_index_status() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "collections": vector_collection_contracts(),
+        "indexing": vector_index_status,
     }
 
 
