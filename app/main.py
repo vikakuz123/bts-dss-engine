@@ -52,6 +52,7 @@ from app.dss_services import (
     vector_collection_contracts,
 )
 from app.qdrant_service import build_qdrant_client, index_dss_vectors
+from app.neo4j_service import check_neo4j, get_object_graph_from_neo4j, sync_opportunity_graph
 
 settings = load_settings()
 app = FastAPI(title=settings.app_name)
@@ -567,6 +568,11 @@ def health_qdrant() -> dict[str, object]:
     }
 
 
+@app.get("/health/neo4j")
+def health_neo4j() -> dict[str, object]:
+    return check_neo4j(settings)
+
+
 @app.post("/dashboard/run-pipeline")
 def run_dashboard_pipeline() -> RedirectResponse:
     create_tables(engine)
@@ -728,6 +734,11 @@ def post_run_dss_pipeline() -> dict[str, object]:
     return {"status": "ok", "item": run_decision_pipeline(engine)}
 
 
+@app.post("/graph/sync")
+def post_sync_graph() -> dict[str, object]:
+    return {"status": "ok", "item": sync_opportunity_graph(engine, settings)}
+
+
 @app.get("/opportunities/{opportunity_unit_id}/state")
 def get_s3_state(opportunity_unit_id: int) -> dict[str, object]:
     item = get_opportunity_state(engine, opportunity_unit_id)
@@ -746,7 +757,11 @@ def get_s2_s1_decision(opportunity_unit_id: int) -> dict[str, object]:
 
 @app.get("/objects/{object_id}/graph")
 def get_project_object_graph(object_id: str) -> dict[str, object]:
-    return {"status": "ok", "item": get_object_graph(engine, object_id)}
+    item = get_object_graph_from_neo4j(settings, object_id)
+    if item is None:
+        item = get_object_graph(engine, object_id)
+        item["source"] = "postgres"
+    return {"status": "ok", "item": item}
 
 
 @app.get("/dashboard/manager")
